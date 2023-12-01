@@ -1,2 +1,6 @@
 .vscode
 venv
+catboost_info
+__pycache__
+tmp_callback.hdf5
+что доработать.txt
