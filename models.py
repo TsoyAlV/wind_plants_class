@@ -6,25 +6,139 @@ from catboost import CatBoostRegressor
 import lightgbm as lgb
 import time
 import sklearn
+import optuna
 
 
-def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, random_seed = 42, verbose_=1, test_size=0.175):
-    x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=0.175)
+def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune_params = {'n_trials':50, 'timeout_secunds':3600*3}, random_seed = 42, verbose_=1, test_size=0.175):
+    x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
     # x_traintest, X_holdout, y_traintest, y_holdout = df2.drop(columns=[f'N_{num}'])[:start_test_date], df2.drop(columns=[f'N_{num}'])[start_test_date:], df2[[f'N_{num}']][:start_test_date], df2[[f'N_{num}']][start_test_date:]
     
     # dropout = trial.suggest_float("dropout", 0.01, 0.09, step=0.02)
-    activate1 = params['activate1']      
-    activate2 = params['activate2']      
-    activate3 = params['activate3']      
-    activate4 = params['activate4']      
-    activate5 = params['activate5']      
-    
-    units0 = params['units0']            
-    units1 = params['units1']            
-    units2 = params['units2']            
-    add_layer = params['add_layer']      
-    add_units3 = params['units3']    
-    
+
+    if tune:
+        def objective(trial):
+            t_initial = time.time()
+            best_params = {
+                            'activate1': trial.suggest_categorical('activate1',['selu','relu','linear']),
+                            'activate2': trial.suggest_categorical('activate2',['selu','relu','linear']),
+                            'activate3': trial.suggest_categorical('activate3',['selu','relu','linear']),
+                            'activate4': trial.suggest_categorical('activate4',['selu','relu','linear']),
+                            'activate5': trial.suggest_categorical('activate5',['selu','relu','linear']),
+                            'units0': trial.suggest_int('units0', 40,160),
+                            'units1': trial.suggest_int('units1', 15,80),
+                            'units2': trial.suggest_int('units2', 4,45),
+                            'add_layer': trial.suggest_categorical('add_layer',[True, False]),
+                            'add_units3': trial.suggest_int('add_units3', 4,45),
+                            'loss_func': trial.suggest_categorical('loss_func', ['mae','mse'])
+                            }
+            activate1 = best_params['activate1']
+            activate2 = best_params['activate2']
+            activate3 = best_params['activate3']
+            activate4 = best_params['activate4']
+            activate5 = best_params['activate5']
+            units0 = best_params['units0']
+            units1 = best_params['units1']
+            units2 = best_params['units2']
+            add_layer = best_params['add_layer']
+            add_units3 = best_params['add_units3']
+            loss_func = best_params['loss_func']
+
+            df_train_x1, df_test_x1, df_train_y1, df_test_y1 = sklearn.model_selection.train_test_split(x_traintest, y_traintest,
+                                                                                            test_size=0.20,
+                                                                                            random_state=42,
+                                                                                            shuffle=True)
+            earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=100, verbose=0, mode='min')
+            mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
+            reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
+            callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
+
+            nn1 = tf.keras.models.Sequential()
+            nn1.add(tf.keras.layers.Input(shape=(df_train_x1.shape[1:])))
+            nn1.add(tf.keras.layers.Dense(units=units0,
+                                        activation=activate1,
+                                        input_shape = df_train_x1.shape[1:]))
+            nn1.add(tf.keras.layers.Dense(units=units1,
+                                        activation=activate2))
+            nn1.add(tf.keras.layers.BatchNormalization())
+            nn1.add(tf.keras.layers.Dense(units=units2,
+                                        activation=activate5))
+            if add_layer:
+                nn1.add(tf.keras.layers.Dense(units=add_units3,
+                                              activation=activate3))
+            nn1.add(tf.keras.layers.Dense(units=24,
+                                        activation=activate4))
+
+            weights = nn1.weights
+            zeros_weights = []
+            rng=np.random.RandomState(42)
+
+            for i in range(len(weights)):
+                shape = weights[i].shape
+                zeros_weights.append(rng.rand(*shape))
+            nn1.set_weights(zeros_weights)
+            opt = tf.optimizers.Adam(learning_rate=1e-2)
+            nn1.compile(optimizer=opt,
+                    loss = loss_func)
+            nn1.fit(df_train_x1,
+                    df_train_y1,
+                    batch_size=500,
+                    epochs=epoches,
+                    verbose=0,
+                    callbacks=callbacks, # Early stopping
+                    validation_data=(df_test_x1, df_test_y1))
+            y_holdout_pred = nn1.predict(df_test_x1)
+            df_pred_holdout = pd.DataFrame(data = y_holdout_pred, 
+                                            index=df_test_x1.index,)
+                                # columns = [f'N_pred_{num}'])
+            df_err = pd.concat([df_test_y1, df_pred_holdout], axis=1)
+            df_err = df_err[df_err.index.hour == 0]
+            daterange = []
+            for date in df_err.index:
+                tmp_lst = [date+pd.to_timedelta(f'{hour}h') for hour in range(24)]
+                daterange.extend(tmp_lst)
+            tmp_lst = []
+            for i in range(24):
+                tmp_lst.extend([f'N_targ_{i}', i])
+            df_err = df_err[tmp_lst]
+            df_err = pd.DataFrame(np.array(df_err).reshape(-1,2), index=daterange, columns=[f'N_{num}',f'N_pred_{num}'])    
+            df_err = df_err.reindex(daterange) 
+            df_err[f'N_{num}'] = scally.inverse_transform(df_err[[f'N_{num}']])
+            df_err[f'N_pred_{num}'] = scally.inverse_transform(df_err[[f'N_pred_{num}']])
+            df_err['err'] = (df_err[f'N_{num}']-df_err[f'N_pred_{num}']).abs()/Ncap*100
+            print(f'затрачено на 1 итерацию {time.time() - t_initial:3.3f} c')    
+            return df_err['err'].mean()
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=tune_params['n_trials'], 
+                       timeout=tune_params['timeout_secunds'])
+        activate1 = study.best_params['activate1']      
+        activate2 = study.best_params['activate2']      
+        activate3 = study.best_params['activate3']      
+        activate4 = study.best_params['activate4']      
+        activate5 = study.best_params['activate5']      
+        units0 = study.best_params['units0']            
+        units1 = study.best_params['units1']            
+        units2 = study.best_params['units2']            
+        add_layer = study.best_params['add_layer']      
+        add_units3 = study.best_params['add_units3']   
+        loss_func = study.best_params['loss_func']
+        best_params = study.best_params
+        print("Подбор гиперпараметров окончен.")
+        print('best_params=', best_params)
+    else:
+        activate1 = params['activate1']      
+        activate2 = params['activate2']      
+        activate3 = params['activate3']      
+        activate4 = params['activate4']      
+        activate5 = params['activate5']      
+        
+        units0 = params['units0']            
+        units1 = params['units1']            
+        units2 = params['units2']            
+        add_layer = params['add_layer']      
+        add_units3 = params['units3']   
+        loss_func = params['loss_func']
+        best_params = None
+
     df_train_x1, df_test_x1, df_train_y1, df_test_y1 = train_test_split(x_traintest, y_traintest,
                                                                                     test_size=test_size,
                                                                                     random_state=42,
@@ -40,18 +154,14 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, random_seed = 42
     nn1.add(tf.keras.layers.Dense(units=units0,
                                   activation=activate1,
                                   input_shape = df_train_x1.shape[1:]))
-    # nn1.add(tf.keras.layers.BatchNormalization())
-    # nn1.add(tf.keras.layers.Dropout(study.params['dropout'], seed=1))
     nn1.add(tf.keras.layers.Dense(units=units1,
                                   activation=activate2))
-    # nn1.add(tf.keras.layers.Dropout(study.params['dropout'], seed=1))
     nn1.add(tf.keras.layers.BatchNormalization())
     nn1.add(tf.keras.layers.Dense(units=units2,
                                   activation=activate5))
-    # nn1.add(tf.keras.layers.Dropout(study.params['dropout'], seed=1))
-    # nn1.add(tf.keras.layers.BatchNormalization())
     if add_layer:
-        nn1.add(tf.keras.layers.Dense(units=add_units3,activation=activate3))
+        nn1.add(tf.keras.layers.Dense(units=add_units3,
+                                      activation=activate3))
     nn1.add(tf.keras.layers.Dense(units=24,
                                   activation=activate4))
 
@@ -65,7 +175,7 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, random_seed = 42
     nn1.set_weights(zeros_weights)
     opt = tf.optimizers.Adam(learning_rate=1e-2)
     nn1.compile(optimizer=opt,
-               loss = 'mae')
+               loss = loss_func)
     history = nn1.fit(df_train_x1,
             df_train_y1,
             batch_size=500,
@@ -79,11 +189,6 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, random_seed = 42
                                     index=X_holdout.index,)
                           # columns = [f'N_pred_{num}'])
     df_err = pd.concat([y_holdout,df_pred_holdout], axis=1)
-    # df_err = (df_err-2)*Ncap/2+Ncap/2
-    # df_err['err'] = (df_err[f'N_{num}'] - df_err[f'N_pred_{num}']).abs()*100/Ncap
-    # # df_err = df_err.loc[(df_err['err']<100)&(df_err['err']>-100)]
-    # print(f'Точность модели: {abs(df_err["err"]).mean()}%')
-    df_err = df_err[df_err.index.hour == 0]
     df_err = df_err[df_err.index.hour == 0]
     daterange = []
     for date in df_err.index:
@@ -108,8 +213,7 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, random_seed = 42
     df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
-    return df_err, nn1, history
-
+    return df_err, nn1, history, best_params
 
 def solve_model_lstm(x, y, num, epoches, scally, Ncap, random_seed = 42, verbose_=0, test_size=0.175):
     # x_traintest, X_holdout, y_traintest, y_holdout = df2.drop(columns=[f'N_{num}'])[:start_test_date], df2.drop(columns=[f'N_{num}'])[start_test_date:], df2[[f'N_{num}']][:start_test_date], df2[[f'N_{num}']][start_test_date:]
@@ -171,7 +275,6 @@ def solve_model_lstm(x, y, num, epoches, scally, Ncap, random_seed = 42, verbose
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
     return df_err, nn1, history
-
 
 def solve_model_catboost(x,y, num, params, epoches, scally, Ncap, verbose_, test_size=0.175):
     # # #({'learning_rate': 0.1, 'l2_leaf_reg': 6.0, 'depth': 8}, 755.6520656574232)

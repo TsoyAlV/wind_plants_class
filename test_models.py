@@ -20,53 +20,53 @@ loc_points = [[48.117803, 39.977637],
                 [48.116879, 39.977684],
                 [48.118266, 39.963142]]
 eng = create_engine('postgresql://postgres:achtung@192.168.251.133:5432/fortum_wind')
+num = '26'
 
-# model = Model(debug=True)
+
+
+# model = Model())
 # model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data('26')
-# model.fit_predict()
-# df_err, model1, history = model.df_err, model.model, model.history
+# model.prep_data(num)
+# model.fit_predict(num, purpose='tune_params')
+# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
 # print(df_err)
 # print(model1)
+# print(best_params)
 # print(history.evals_result_['learn']['MAPE'])
 
 
 # import lightgbm as lgb
 
-# model = Model('lgbm','mae', debug=True)
+# model = Model('lgbm','mae')
 # model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data('26')
-# model.fit_predict()
-# df_err, model1, history = model.df_err, model.model, model.history
+# model.prep_data(num)
+# model.fit_predict(num, purpose='tune_params')
+# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
 # print(model1)
 # print(df_err)
+# print(best_params)
 # print(history['valid_0']['mape'])
 
 
-model = Model('fc_nn', debug=True)
+model = Model('fc_nn')
 model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-model.prep_data('26')
-model.fit_predict()
-df_err, model1, history = model.df_err, model.model, model.history
+model.prep_data(num)
+model.fit_predict(num, purpose='tune_params')
+df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
 print(df_err)
 print(model1)
+print(best_params)
 print(history.history['loss'][20:])
 print(history.history['val_loss'][20:])
 
 
-# model = Model('lstm', debug=True)
+# model = Model('lstm')
 # model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# print(model.nums)
-# model.prep_data('26')
-# print(model.x_trees)
-# print(model.y_trees)
-# print(model.x_fcnn)
-# print(model.y_fcnn)
-# print(model.x_lstm)
-# print(model.y_lstm)
-# model.fit_predict()
-# df_err, model1, history = model.df_err, model.model, model.history
+# model.prep_data(num)
+# model.fit_predict(num, purpose='tune_params')
+# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
 # print(df_err)
 # print(model1)
+# print(best_params)
 # print(history.history['loss'][20:])
 # print(history.history['val_loss'][20:])
