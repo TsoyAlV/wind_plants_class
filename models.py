@@ -84,13 +84,17 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, random_seed = 42
     # # df_err = df_err.loc[(df_err['err']<100)&(df_err['err']>-100)]
     # print(f'Точность модели: {abs(df_err["err"]).mean()}%')
     df_err = df_err[df_err.index.hour == 0]
-    daterange = pd.date_range(df_err.index[0], str(df_err.index[-1]) + ' 23:00', freq='1h')
+    df_err = df_err[df_err.index.hour == 0]
+    daterange = []
+    for date in df_err.index:
+        tmp_lst = [date+pd.to_timedelta(f'{hour}h') for hour in range(24)]
+        daterange.extend(tmp_lst)
     tmp_lst = []
     for i in range(24):
         tmp_lst.extend([f'N_targ_{i}', i])
     df_err = df_err[tmp_lst]
-    df_err = pd.DataFrame(np.array(df_err).reshape(-1,2), columns=[f'N_{num}',f'N_pred_{num}'])    
-    df_err.index = daterange    
+    df_err = pd.DataFrame(np.array(df_err).reshape(-1,2), index=daterange, columns=[f'N_{num}',f'N_pred_{num}'])    
+    df_err = df_err.reindex(daterange) 
     df_err[f'N_{num}'] = scally.inverse_transform(df_err[[f'N_{num}']])
     df_err[f'N_pred_{num}'] = scally.inverse_transform(df_err[[f'N_pred_{num}']])
     max_N = round(df_err[f'N_{num}'].max(),2)
@@ -142,13 +146,16 @@ def solve_model_lstm(x, y, num, epoches, scally, Ncap, random_seed = 42, verbose
                           # columns = [f'N_pred_{num}'])
     df_err = pd.concat([y_holdout, df_pred_holdout], axis=1)
     df_err = df_err[df_err.index.hour == 0]
-    daterange = pd.date_range(df_err.index[0], str(df_err.index[-1]) + ' 23:00', freq='1h')
+    daterange = []
+    for date in df_err.index:
+        tmp_lst = [date+pd.to_timedelta(f'{hour}h') for hour in range(24)]
+        daterange.extend(tmp_lst)
     tmp_lst = []
     for i in range(24):
         tmp_lst.extend([f'N_targ_{i}', i])
     df_err = df_err[tmp_lst]
-    df_err = pd.DataFrame(np.array(df_err).reshape(-1,2), columns=[f'N_{num}',f'N_pred_{num}'])    
-    df_err.index = daterange    
+    df_err = pd.DataFrame(np.array(df_err).reshape(-1,2), index=daterange, columns=[f'N_{num}',f'N_pred_{num}'])    
+    df_err = df_err.reindex(daterange) 
     df_err[f'N_{num}'] = scally.inverse_transform(df_err[[f'N_{num}']])
     df_err[f'N_pred_{num}'] = scally.inverse_transform(df_err[[f'N_pred_{num}']])
     max_N = round(df_err[f'N_{num}'].max(),2)
@@ -205,8 +212,7 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap, verbose_, test
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
     return df_err, model_with_early_stop, history
 
-
-def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap, verbose_):
+def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap, verbose_, test_size=0.175):
     num_leaves = params['num_leaves']
     learning_rate = params['learning_rate']
     linear_lambda = params['linear_lambda']
@@ -215,7 +221,7 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap, verbose_):
     params = {'objective': 'regression', 'seed': 0, 'num_leaves': num_leaves, 'learning_rate': learning_rate,
               'metric': 'mape', 'verbose': 0, 'linear_lambda': linear_lambda, 'linear_tree': linear_tree, 
              'verbose':-1}
-    x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=0.175)
+    x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(x_traintest, y_traintest,
                                                                                     test_size=0.20,
                                                                                     random_state=42,
