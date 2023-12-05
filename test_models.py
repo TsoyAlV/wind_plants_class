@@ -24,28 +24,30 @@ num = '26'
 
 
 
-# model = Model())
-# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data(num)
-# model.fit_predict(num, purpose='tune_params')
-# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+model = Model()
+model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+model.prep_data(num)
+model.fit_predict(num, purpose='tune_params')
+df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
 # print(df_err)
-# print(model1)
-# print(best_params)
+print(model1)
+print(best_params)
+print(history.evals_result_['learn'][best_params['loss_func']])
 # print(history.evals_result_['learn']['MAPE'])
 
 
-# import lightgbm as lgb
+# LGBM
+import lightgbm as lgb
 
-# model = Model('lgbm','mae')
-# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data(num)
-# model.fit_predict(num, purpose='tune_params')
-# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-# print(model1)
+model = Model('lgbm')
+model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+model.prep_data(num)
+model.fit_predict(num, purpose='tune_params')
+df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+print(model1)
 # print(df_err)
-# print(best_params)
-# print(history['valid_0']['mape'])
+print(best_params)
+print(history['valid_0'][best_params['loss_function']])
 
 
 model = Model('fc_nn')
@@ -53,20 +55,20 @@ model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
 model.prep_data(num)
 model.fit_predict(num, purpose='tune_params')
 df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-print(df_err)
+# print(df_err)
 print(model1)
 print(best_params)
 print(history.history['loss'][20:])
 print(history.history['val_loss'][20:])
 
 
-# model = Model('lstm')
-# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data(num)
-# model.fit_predict(num, purpose='tune_params')
-# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+model = Model('lstm')
+model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+model.prep_data(num)
+model.fit_predict(num, purpose='tune_params')
+df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
 # print(df_err)
-# print(model1)
-# print(best_params)
-# print(history.history['loss'][20:])
-# print(history.history['val_loss'][20:])
+print(model1)
+print(best_params)
+print(history.history['loss'][20:])
+print(history.history['val_loss'][20:])
