@@ -21,54 +21,91 @@ loc_points = [[48.117803, 39.977637],
                 [48.118266, 39.963142]]
 eng = create_engine('postgresql://postgres:achtung@192.168.251.133:5432/fortum_wind')
 num = '26'
+params = {
+    'catboost':
+        {'learning_rate': 0.024648325316324382,
+        'l2_leaf_reg': 8.14993506614837,
+        'depth': 8,
+        'loss_func':'MAPE'},
+
+    'lgbm':
+        {'num_leaves': 99,
+        'learning_rate': 0.01040976680049962,
+        'lambda_l1':0,
+        'lambda_l2':0,
+        'linear_lambda': 9.09258101406036,
+        'linear_tree': True,
+        'loss_function':'mae'
+        }, 
+
+    'fc_nn': 
+        {'activate1': 'selu',
+        'activate2': 'relu',
+        'activate3': 'relu',
+        'activate4': 'relu',
+        'activate5': 'relu',
+        'units0': 89,
+        'units1': 21,
+        'units2': 18,
+        'units3': 9,
+        'add_layer': True,
+        'loss_func': 'mae'},
+
+    'lstm':
+        {'units0': 35,
+        'learning_rate': 0.015,
+        'batch_size': 400,
+        'loss_func': 'mae'}
+        }
 
 
-
-model = Model()
-model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-model.prep_data(num)
-model.fit_predict(num, purpose='tune_params')
-df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-# print(df_err)
-print(model1)
-print(best_params)
-print(history.evals_result_['learn'][best_params['loss_func']])
-# print(history.evals_result_['learn']['MAPE'])
-
-
-# LGBM
-import lightgbm as lgb
-
-model = Model('lgbm')
-model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-model.prep_data(num)
-model.fit_predict(num, purpose='tune_params')
-df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-print(model1)
-# print(df_err)
-print(best_params)
-print(history['valid_0'][best_params['loss_function']])
+# model = Model()
+# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+# model.prep_data(num)
+# model.fit_predict(num, purpose='tune_params')
+# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+# # print(df_err)
+# print(model1)
+# print(best_params)
+# print(history.evals_result_['learn'][best_params['loss_func']])
+# # print(history.evals_result_['learn']['MAPE'])
 
 
-model = Model('fc_nn')
-model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-model.prep_data(num)
-model.fit_predict(num, purpose='tune_params')
-df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-# print(df_err)
+# # LGBM
+# import lightgbm as lgb
+
+# model = Model('lgbm')
+# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+# model.prep_data(num)
+# model.fit_predict(num, purpose='tune_params')
+# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+# print(model1)
+# # print(df_err)
+# print(best_params)
+# print(history['valid_0'][best_params['loss_function']])
+
+
+# model = Model('fc_nn')
+# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+# model.prep_data(num)
+# model.fit_predict(num, purpose='tune_params')
+# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+# # print(df_err)
+# print(model1)
+# print(best_params)
+# print(history.history['loss'][20:])
+# print(history.history['val_loss'][20:])
+
+model_name = 'lstm'
+model = Model(model_name)
+model.prep_all_data(loc_points, eng, name_gtp='GUK_3', Ncap=22.8)
+x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, num)
+df_err, model1, history, best_params = model.fit_predict(x_lstm, y_lstm, num, params, model_name, purpose='tune_params')
+# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+print(df_err)
 print(model1)
 print(best_params)
 print(history.history['loss'][20:])
 print(history.history['val_loss'][20:])
 
 
-model = Model('lstm')
-model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-model.prep_data(num)
-model.fit_predict(num, purpose='tune_params')
-df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-# print(df_err)
-print(model1)
-print(best_params)
-print(history.history['loss'][20:])
-print(history.history['val_loss'][20:])

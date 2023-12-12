@@ -63,12 +63,13 @@ def first_prep_data(loc_points,
 
     df_req = df_req.pivot(index = 'tstamp_initial_utc', columns='var_name',values='value').dropna()
     df_req.index = pd.to_datetime(df_req.index, utc=True).tz_convert('UTC').tz_localize(None)
+    
     set_nums = set(map(lambda x: x if 'N_' in x else None, df_req.columns))
     set_nums.remove(None)
     set_nums.remove('N_GTP')
     nums = []
-    start_date = pd.to_datetime(start_date).date()
-    end_date   = pd.to_datetime(end_date).date()
+    start_date = pd.to_datetime(df_req.dropna().index[0]).date()
+    end_date   = pd.to_datetime(df_req.dropna().index[-1]).date()
     
     # Данные из openmeteo
     all_weather_points = []
@@ -86,7 +87,6 @@ def first_prep_data(loc_points,
         
     for num in nums:
         tmp_df = df_req[[f'N_{num}', f'WS_{num}']].copy()
-
         compare_dict = {}
         compare_dict['spearman'] = dict()
         compare_dict['pearson'] = dict()
@@ -150,6 +150,7 @@ def form_batch_trees(df, nums):
     dict_df_num = {}
     tmp_df = None
     df2 = df.copy()
+    df2 = df2.reindex(pd.date_range(df2.index[0], df2.index[-1], freq='1h'))
     for num in nums:
         tmp_df = df2[[f'N_{num}',f'wind_speed_{num}_10m']]
         for shift in range(24):
@@ -167,6 +168,7 @@ def form_batch_nn(df, nums):
     dict_df_num = {}
     tmp_df = None
     df2 = df.copy()
+    df2 = df2.reindex(pd.date_range(df2.index[0], df2.index[-1], freq='1h'))
     for num in nums:
         tmp_df = df2[[f'N_{num}',f'wind_speed_{num}_10m']]
         for shift in range(24):

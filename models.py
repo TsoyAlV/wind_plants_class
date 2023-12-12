@@ -2,7 +2,7 @@ from sklearn.model_selection import train_test_split
 import tensorflow as tf
 import pandas as pd
 import numpy as np
-from catboost import CatBoostRegressor
+from catboost import CatBoostRegressor, Pool
 import lightgbm as lgb
 import time
 import sklearn
@@ -14,10 +14,14 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
     # x_traintest, X_holdout, y_traintest, y_holdout = df2.drop(columns=[f'N_{num}'])[:start_test_date], df2.drop(columns=[f'N_{num}'])[start_test_date:], df2[[f'N_{num}']][:start_test_date], df2[[f'N_{num}']][start_test_date:]
     
     # dropout = trial.suggest_float("dropout", 0.01, 0.09, step=0.02)
+    t_initial0 = time.time()
+    X_train, X_test, y_train, y_test = train_test_split(x_traintest, y_traintest,
+                                                                                    test_size=test_size,
+                                                                                    random_state=42,
+                                                                                    shuffle=False)
 
     if tune:
         def objective(trial):
-            t_initial = time.time()
             best_params = {
                             'activate1': trial.suggest_categorical('activate1',['selu','relu','linear']),
                             'activate2': trial.suggest_categorical('activate2',['selu','relu','linear']),
@@ -31,6 +35,7 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
                             'add_units3': trial.suggest_int('add_units3', 4,45),
                             'loss_func': trial.suggest_categorical('loss_func', ['mae','mse'])
                             }
+            t_initial = time.time()
             activate1 = best_params['activate1']
             activate2 = best_params['activate2']
             activate3 = best_params['activate3']
@@ -43,20 +48,16 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
             add_units3 = best_params['add_units3']
             loss_func = best_params['loss_func']
 
-            df_train_x1, df_test_x1, df_train_y1, df_test_y1 = sklearn.model_selection.train_test_split(x_traintest, y_traintest,
-                                                                                            test_size=0.20,
-                                                                                            random_state=42,
-                                                                                            shuffle=True)
             earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=100, verbose=0, mode='min')
             mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
             reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
             callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
 
             nn1 = tf.keras.models.Sequential()
-            nn1.add(tf.keras.layers.Input(shape=(df_train_x1.shape[1:])))
+            nn1.add(tf.keras.layers.Input(shape=(X_train.shape[1:])))
             nn1.add(tf.keras.layers.Dense(units=units0,
                                         activation=activate1,
-                                        input_shape = df_train_x1.shape[1:]))
+                                        input_shape = X_train.shape[1:]))
             nn1.add(tf.keras.layers.Dense(units=units1,
                                         activation=activate2))
             nn1.add(tf.keras.layers.BatchNormalization())
@@ -79,17 +80,17 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
             opt = tf.optimizers.Adam(learning_rate=1e-2)
             nn1.compile(optimizer=opt,
                     loss = loss_func)
-            nn1.fit(df_train_x1,
-                    df_train_y1,
-                    batch_size=500,
+            nn1.fit(X_train,
+                    y_train,
+                    batch_size=X_train.shape[0]//10,
                     epochs=epoches,
                     verbose=0,
                     callbacks=callbacks, # Early stopping
-                    validation_data=(df_test_x1, df_test_y1))
-            res = nn1.predict(df_test_x1)
-            targ = df_test_y1.copy()
+                    validation_data=(X_test, y_test))
+            res = nn1.predict(X_test)
+            targ = y_test.copy()
             result = np.mean(np.mean(np.abs(targ-res)))*100/Ncap
-            # res = nn1.evaluate(df_test_x1, df_test_y1)
+            # res = nn1.evaluate(df_test_x1, y_test)
             print(f'Полученная ошибка - {round(result,4)}, затрачено на 1 итерацию {time.time() - t_initial:3.3f} c')    
             return result
         study = optuna.create_study(direction="minimize")
@@ -120,25 +121,21 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
         units1 = params['units1']            
         units2 = params['units2']            
         add_layer = params['add_layer']      
-        add_units3 = params['units3']   
+        add_units3 = params['add_units3']   
         loss_func = params['loss_func']
         best_params = None
 
-    df_train_x1, df_test_x1, df_train_y1, df_test_y1 = train_test_split(x_traintest, y_traintest,
-                                                                                    test_size=test_size,
-                                                                                    random_state=42,
-                                                                                    shuffle=False)
     earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=150, verbose=0, mode='min')
     mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
     reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
     callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
 
     nn1 = tf.keras.models.Sequential()
-    nn1.add(tf.keras.layers.Input(shape=(df_train_x1.shape[1:])))
+    nn1.add(tf.keras.layers.Input(shape=(X_train.shape[1:])))
 
     nn1.add(tf.keras.layers.Dense(units=units0,
                                   activation=activate1,
-                                  input_shape = df_train_x1.shape[1:]))
+                                  input_shape = X_train.shape[1:]))
     nn1.add(tf.keras.layers.Dense(units=units1,
                                   activation=activate2))
     nn1.add(tf.keras.layers.BatchNormalization())
@@ -161,13 +158,13 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
     opt = tf.optimizers.Adam(learning_rate=1e-2)
     nn1.compile(optimizer=opt,
                loss = loss_func)
-    history = nn1.fit(df_train_x1,
-            df_train_y1,
+    history = nn1.fit(X_train,
+            y_train,
             batch_size=500,
             epochs=epoches,
             verbose=verbose_,
             callbacks=callbacks, # Early stopping
-            validation_data=(df_test_x1, df_test_y1))
+            validation_data=(X_test, y_test))
     
     y_holdout_pred = nn1.predict(X_holdout)
     df_pred_holdout = pd.DataFrame(data = y_holdout_pred, 
@@ -198,7 +195,8 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
     df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
-    return df_err, nn1, history, best_params
+    print(f'Время обучения мдели lstm составляет {time.time() - t_initial0:3.3f} c')   
+    return df_err, nn1, history.history, best_params
 
 def solve_model_lstm(x, y, num, params, epoches, scally, Ncap, 
                      tune = False, 
@@ -206,6 +204,7 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
                      random_seed = 42, 
                      verbose_=0, 
                      test_size=0.175):
+    t_initial0 = time.time()
     # x_traintest, X_holdout, y_traintest, y_holdout = df2.drop(columns=[f'N_{num}'])[:start_test_date], df2.drop(columns=[f'N_{num}'])[start_test_date:], df2[[f'N_{num}']][:start_test_date], df2[[f'N_{num}']][start_test_date:]
     # x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=0.2)
     train_test_range = int(len(x)*(1-test_size))
@@ -214,26 +213,25 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
     X_train, X_test, y_train, y_test = x_traintest[:train_range], x_traintest[train_range:], y_traintest[:train_range], y_traintest[train_range:]
     if tune:
         def objective(trial):
-            print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
             t_initial = time.time()
             earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=150, verbose=0, mode='min')
-            mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
             reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
-            callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
-            params = {
-                'units0': trial.suggest_int('units0', 4,45),
+            callbacks = [earlyStopping, reduce_lr_loss]
+            best_params = {
+                'units0': trial.suggest_int('units0', 20, 80),
+                'activate1': trial.suggest_categorical('activate1', ['sigmoid','selu']),
+                'activate3': trial.suggest_categorical('activate3',['selu','relu','linear']),
                 'learning_rate': trial.suggest_float('learning_rate', 0.0001, 0.03),
-                'batch_size': 400,
                 'loss_func': trial.suggest_categorical('loss_func', ['mae','mse'])
             }
-            units0 = params['units0']
-            batch_size0 = params['batch_size']
-            learning_rate0 = params['learning_rate']
-            loss_func0 = params['loss_func']
-
+            units0 = best_params['units0']
+            activate1 = best_params['activate1']
+            learning_rate0 = best_params['learning_rate']
+            loss_func0 = best_params['loss_func']
+            activate3 = best_params['activate3']
             nn1 = tf.keras.models.Sequential()
-            nn1.add(tf.keras.layers.LSTM(units=units0, activation='sigmoid', input_shape = X_train.shape[1:]))
-            nn1.add(tf.keras.layers.Dense(units=24, activation='linear'))
+            nn1.add(tf.keras.layers.LSTM(units=units0, activation=activate1, input_shape = X_train.shape[1:]))
+            nn1.add(tf.keras.layers.Dense(units=24, activation=activate3))
             opt = tf.optimizers.Adam(learning_rate=learning_rate0)
             nn1.compile(optimizer=opt,
                     loss = loss_func0)
@@ -245,13 +243,7 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
                 shape = weights[i].shape
                 zeros_weights.append(rng.rand(*shape))
             nn1.set_weights(zeros_weights)
-            print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-            nn1.fit(X_train, y_train, 
-                    batch_size=batch_size0, 
-                    epochs=epoches, 
-                    verbose=verbose_, 
-                    callbacks=callbacks, 
-                    validation_data=(X_test, y_test))
+            nn1.fit(X_train, y_train, batch_size=X_train.shape[0]//10, epochs=epoches, verbose=verbose_, callbacks=callbacks, validation_data=(X_test, y_test))
             res = nn1.predict(X_test)
             targ = y_test.copy()
             result = np.mean(np.mean(np.abs(targ-res)))*100/Ncap
@@ -263,28 +255,31 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
         study.optimize(objective, n_trials=tune_params['n_trials'], 
                         timeout=tune_params['timeout_secunds'])
         best_params = study.best_params
-        units0 = study.best_params['units0']
-        batch_size0 =  params['batch_size']
-        learning_rate0 = study.best_params['learning_rate']
-        loss_func0 = study.best_params['loss_func']
+        units0 = best_params['units0']
+        activate1 = best_params['activate1']
+        activate3 = best_params['activate3']
+        learning_rate0 = best_params['learning_rate']
+        loss_func0 = best_params['loss_func']
+        print("Подбор гиперпараметров окончен.")
+        print('best_params=', best_params)
     else:
         units0 = params['units0']
-        batch_size0 = params['batch_size']
+        activate1 = params['activate1']
+        activate3 = params['activate3']
         learning_rate0 = params['learning_rate']
         loss_func0 = params['loss_func']
         best_params = None
-
     earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=150, verbose=0, mode='min')
     mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
     reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
     callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
-    
+
     nn1 = tf.keras.models.Sequential()
-    nn1.add(tf.keras.layers.LSTM(units=units0, activation='sigmoid', input_shape = X_train.shape[1:]))
-    nn1.add(tf.keras.layers.Dense(units=24, activation='linear'))
+    nn1.add(tf.keras.layers.LSTM(units=units0, activation=activate1, input_shape = X_train.shape[1:]))
+    nn1.add(tf.keras.layers.Dense(units=24, activation=activate3))
     opt = tf.optimizers.Adam(learning_rate=learning_rate0)
     nn1.compile(optimizer=opt,
-               loss = loss_func0)
+            loss = loss_func0)
     
     weights = nn1.weights
     zeros_weights = []
@@ -293,8 +288,7 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
         shape = weights[i].shape
         zeros_weights.append(rng.rand(*shape))
     nn1.set_weights(zeros_weights)
-    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape)
-    history = nn1.fit(X_train, y_train, batch_size=batch_size0, epochs=epoches, verbose=verbose_, callbacks=callbacks, validation_data=(X_test, y_test))
+    history = nn1.fit(X_train, y_train, batch_size=X_train.shape[0]//10, epochs=epoches, verbose=verbose_, callbacks=callbacks, validation_data=(X_test, y_test))
     
     y_holdout_pred = nn1.predict(X_holdout)
     df_pred_holdout = pd.DataFrame(data = y_holdout_pred, index=y_holdout.index)
@@ -325,19 +319,23 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
     df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
-    return df_err, nn1, history, best_params
+    print(f'Время обучения мдели lstm составляет {time.time() - t_initial0:3.3f} c')   
+    return df_err, nn1, history.history, best_params
 
 def solve_model_catboost(x,y, num, params, epoches, scally, Ncap, 
                      tune = False, 
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 },
                      verbose_=0, 
                      test_size=0.175):
+    t_initial0 = time.time()
     x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
     X_train, X_test, y_train, y_test = train_test_split(x_traintest, y_traintest,
                                                                                     test_size=0.20,
                                                                                     random_state=42,
                                                                                     shuffle=False)
-    
+    train_pool = Pool(X_train, label=y_train)
+    test_pool = Pool(X_test, label=y_test)
+
     if tune:
         def objective(trial):
             params = {
@@ -357,8 +355,8 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
             )
 
             model_with_early_stop.fit(
-                X_train, y_train,
-                eval_set=(X_test.values, y_test.values),
+                train_pool,
+                eval_set=test_pool,
                 verbose=verbose_,
                 plot=False
             )
@@ -366,6 +364,7 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
             err = model_with_early_stop.predict(X_test)
             targ = y_test.copy()
             result = np.mean(np.mean(np.abs(targ-np.array([err]).T)))*100
+            print(f'Полученная ошибка - {round(result,4)}, затрачено на 1 итерацию {time.time() - t_initial0:3.3f} c')    
             return result
         
         study = optuna.create_study(direction="minimize")
@@ -373,6 +372,8 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
                         timeout=tune_params['timeout_secunds'])
         best_params = study.best_params
         params = best_params
+        print("Подбор гиперпараметров окончен.")
+        print('best_params=', best_params)
     else:
         best_params = None
 
@@ -388,14 +389,21 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
     )
 
     history = model_with_early_stop.fit(
-        X_train, y_train,
-        eval_set=(X_test.values, y_test.values),
+        train_pool,
+        eval_set=test_pool,
         verbose=verbose_,
         plot=False
     )
-    
+    # Evaluate the model using CatBoost's log loss and F1 score
+    metrics_train = model_with_early_stop.eval_metrics(train_pool, 
+                                                        metrics=params['loss_func'], 
+                                                        plot=True)
+    metrics_test = model_with_early_stop.eval_metrics(test_pool, 
+                                                        metrics=params['loss_func'], 
+                                                        plot=True)
     df_err = y_holdout.copy()
     df_err[f'N_pred_{num}'] = model_with_early_stop.predict(pd.DataFrame(X_holdout))
+    # print(df_err)
     df_err[f'N_{num}'] = scally.inverse_transform(df_err[[f'N_{num}']])
     df_err[f'N_pred_{num}'] = scally.inverse_transform(df_err[[f'N_pred_{num}']])
     df_err = df_err.reindex(pd.date_range(df_err.index[0],df_err.index[-1], freq='H'), axis=0)
@@ -407,6 +415,8 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
     df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
+    print(f'Время обучения модели catboost составляет {time.time() - t_initial0:3.3f} c')   
+    history = {'train':metrics_train, 'test':metrics_test}
     return df_err, model_with_early_stop, history, best_params
 
 def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap, 
@@ -414,7 +424,7 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 }, 
                      verbose_=0,
                      test_size=0.175):
-
+    t_initial0 = time.time()
     x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(x_traintest, y_traintest,
                                                                                     test_size=0.20,
@@ -449,12 +459,13 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
             t0 = time.time()
             timer_callback = lambda env: time_arr.append(time.time() - t0)
             history_callback = {}
-            early_stopping_callback = lgb.early_stopping(50, first_metric_only=False, verbose=True, min_delta=0.0)
+            early_stopping_callback = lgb.early_stopping(150, first_metric_only=False, verbose=True, min_delta=0.0)
             est = lgb.train(params_train, train_data, valid_sets=test_data, num_boost_round=epoches,
                             callbacks=[timer_callback, lgb.record_evaluation(history_callback), early_stopping_callback, lgb.log_evaluation(period=verbose_)])       #categorical_feature=category_indices
             err = est.predict(X_test)
             targ = y_test.copy()
             result = np.mean(np.mean(np.abs(targ-np.array([err]).T)))*100
+            print(f'Полученная ошибка - {round(result,4)}, затрачено на 1 итерацию {time.time() - t_initial0:3.3f} c')    
             return result
         
         study = optuna.create_study(direction="minimize")
@@ -471,6 +482,8 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
                         'linear_lambda':  best_params['linear_lambda'], 
                         'linear_tree':    best_params['linear_tree'],
                         'verbose':-1}
+        print("Подбор гиперпараметров окончен.")
+        print('best_params=', best_params)
     else:
         best_params = None
         params_train = {'objective': 'regression', 'seed': 0, 
@@ -507,4 +520,5 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
     df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
+    print(f'Время обучения модели lgbm составляет {time.time() - t_initial0:3.3f} c')   
     return df_err, est, history_callback, best_params
