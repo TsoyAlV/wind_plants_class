@@ -85,14 +85,14 @@ params = {
 # print(best_params)
 
 
-# model_name = 'fc_nn'
-# model = Model()
-# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, model.nums[0])
-# df_err, model1, history, best_params = model.fit_predict(x_fcnn, y_fcnn, model.nums[0], params, model_name, purpose='test')
-# # print(df_err)
-# print(model1)
-# print(best_params)
+model_name = 'fc_nn'
+model = Model()
+model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, model.nums[0])
+df_err, model1, history, best_params = model.fit_predict(x_fcnn, y_fcnn, model.nums[0], params, model_name, purpose='test')
+# print(df_err)
+print(model1)
+print(best_params)
 
 
 # model_name = 'lstm'

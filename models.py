@@ -531,7 +531,6 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
                     callbacks=[timer_callback, lgb.record_evaluation(history_callback), early_stopping_callback, lgb.log_evaluation(period=verbose_)])       #categorical_feature=category_indices
     df_err = y_holdout.copy()
     df_err[f'N_pred_{num}'] = est.predict(pd.DataFrame(X_holdout))
-    #fitting
     df_err[f'N_{num}'] = scally.inverse_transform(df_err[[f'N_{num}']])
     df_err[f'N_pred_{num}'] = scally.inverse_transform(df_err[[f'N_pred_{num}']])
     df_err = df_err.reindex(pd.date_range(df_err.index[0],df_err.index[-1], freq='H'), axis=0)

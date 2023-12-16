@@ -99,7 +99,7 @@ class Model:
         self.y_lstm = self.y_fc_nn.copy()
         return self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm, self.scallx, self.scally
 
-    def fit_predict(self, x, y, num, params, model_name, test_size=0.175, purpose='fit_by_setted_params'):
+    def fit_predict(self, x, y, num, params, model_name, test_size=0.175, start_test_date=None, purpose='fit_by_setted_params'):
         """
         purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']\n
             test - означает, что производится легкое обучение (25 итераций)\n
@@ -119,17 +119,15 @@ class Model:
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 10
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, None, verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, None, verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1000
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, 
-                                                                                    None, verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, None, verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'tune_params':
                 epoches = 1000
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, True, 
-                                                                                    tune_params, verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, True, tune_params, verbose, test_size=test_size, start_test_date=start_test_date)
 
         # lgbm
         elif model_name == 'lgbm':
@@ -138,18 +136,18 @@ class Model:
                 epoches = 250
                 verbose = 10
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, self.scally, self.Ncap, False, 
-                                                                                None, verbose, test_size=test_size)
+                                                                                None, verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1000
                 verbose = 0
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, self.scally, self.Ncap, False, 
-                                                                                None, verbose, test_size=test_size)
+                                                                                None, verbose, test_size=test_size, start_test_date=start_test_date)
 
             elif self.purpose == 'tune_params':
                 epoches = 1000
                 verbose = 0
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, self.scally, self.Ncap, True, 
-                                                                                tune_params, verbose, test_size=test_size)
+                                                                                tune_params, verbose, test_size=test_size, start_test_date=start_test_date)
 
 
         # fc_nn
@@ -158,18 +156,16 @@ class Model:
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 1
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, False, 
-                                                                                                None, 1,verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, False, None, 1,verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1500
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, False, 
-                                                                                                None, 1,verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, False, None, 1,verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'tune_params':
                 epoches = 1500
                 verbose = 0
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, True, 
-                                                                                                tune_params = tune_params, random_seed=1, verbose_=verbose, test_size=test_size)
+                                                                                                tune_params = tune_params, random_seed=1, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
                 
 
         # LSTM
@@ -178,18 +174,15 @@ class Model:
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 1
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, False, 
-                                                                                None,  random_seed = 42, verbose_=verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, False, None,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1500
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, False, 
-                                                                                None,  random_seed = 42, verbose_=verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, False, None,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'tune_params':
                 epoches = 1500
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, True, 
-                                                                                tune_params,  random_seed = 42, verbose_=verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, True, tune_params,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
         
         # Считаем время выполнения расчета и отображение его в логах
         learning_time = round(float(f'{time.time() - t_initial:3.3f}'), 2)
@@ -262,7 +255,7 @@ class Pipeline_wind_forecast(Model):
         # Удаляем последние (после выполнения функции эти временные параметры будут удлены)
         del self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm
 
-    def form_dict_fit_predict(self, num_to_fit=None, models=['catboost','lgbm','fc_nn','lstm'], test_size=0.175, purpose='fit_by_setted_params'):
+    def form_dict_fit_predict(self, num_to_fit=None, models=['catboost','lgbm','fc_nn','lstm'], test_size=0.175, start_test_date=None, purpose='fit_by_setted_params'):
         """
         purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']\n
             test - означает, что производится легкое обучение (25 итераций)\n
