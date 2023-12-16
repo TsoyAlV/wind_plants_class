@@ -1,4 +1,6 @@
 from main import *
+import warnings
+warnings.filterwarnings('ignore')
 
 from sqlalchemy import create_engine
 
@@ -21,6 +23,7 @@ loc_points = [[48.117803, 39.977637],
                 [48.118266, 39.963142]]
 eng = create_engine('postgresql://postgres:achtung@192.168.251.133:5432/fortum_wind')
 num = '26'
+# Параметры моделей (дефолтные)
 params = {
     'catboost':
         {'learning_rate': 0.024648325316324382,
@@ -47,65 +50,59 @@ params = {
         'units0': 89,
         'units1': 21,
         'units2': 18,
-        'units3': 9,
+        'add_units3': 9,
         'add_layer': True,
         'loss_func': 'mae'},
 
     'lstm':
-        {'units0': 35,
+        {'units0': 40,
+        'activate1': 'sigmoid',
+        'activate3': 'linear',
         'learning_rate': 0.015,
-        'batch_size': 400,
         'loss_func': 'mae'}
         }
 
 
+# import lightgbm as lgb
 # model = Model()
 # model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data(num)
-# model.fit_predict(num, purpose='tune_params')
-# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-# # print(df_err)
+# x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, model.nums[0])
+# df_err, model1, history, best_params = model.fit_predict(x_trees, y_trees, model.nums[0], params, model.model_name, purpose='test')
 # print(model1)
+# print(df_err)
 # print(best_params)
-# print(history.evals_result_['learn'][best_params['loss_func']])
-# # print(history.evals_result_['learn']['MAPE'])
 
 
 # # LGBM
 # import lightgbm as lgb
-
-# model = Model('lgbm')
+# model_name = 'lgbm'
+# model = Model(model_name)
 # model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data(num)
-# model.fit_predict(num, purpose='tune_params')
-# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+# x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, model.nums[0])
+# df_err, model1, history, best_params = model.fit_predict(x_trees, y_trees, model.nums[0], params, model_name, purpose='test')
 # print(model1)
-# # print(df_err)
+# print(df_err)
 # print(best_params)
-# print(history['valid_0'][best_params['loss_function']])
 
 
-# model = Model('fc_nn')
+# model_name = 'fc_nn'
+# model = Model()
 # model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
-# model.prep_data(num)
-# model.fit_predict(num, purpose='tune_params')
-# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+# x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, model.nums[0])
+# df_err, model1, history, best_params = model.fit_predict(x_fcnn, y_fcnn, model.nums[0], params, model_name, purpose='test')
 # # print(df_err)
 # print(model1)
 # print(best_params)
-# print(history.history['loss'][20:])
-# print(history.history['val_loss'][20:])
 
-model_name = 'lstm'
-model = Model(model_name)
-model.prep_all_data(loc_points, eng, name_gtp='GUK_3', Ncap=22.8)
-x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, num)
-df_err, model1, history, best_params = model.fit_predict(x_lstm, y_lstm, num, params, model_name, purpose='tune_params')
-# df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
-print(df_err)
-print(model1)
-print(best_params)
-print(history.history['loss'][20:])
-print(history.history['val_loss'][20:])
+
+# model_name = 'lstm'
+# model = Model(model_name)
+# model.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+# x_trees, y_trees, x_fcnn, y_fcnn, x_lstm, y_lstm, scallx, scally = model.prep_data(model.df_all, num)
+# df_err, model1, history, best_params = model.fit_predict(x_lstm, y_lstm, num, params, model_name, purpose='test')
+# # df_err, model1, history, best_params = model.df_err, model.model, model.history, model.best_params
+# print(df_err)
+# print(model1)
+# print(best_params)
 
 

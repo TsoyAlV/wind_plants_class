@@ -9,16 +9,25 @@ import sklearn
 import optuna
 
 
-def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune_params = {'n_trials':50, 'timeout_secunds':3600*3}, random_seed = 42, verbose_=1, test_size=0.175):
-    x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
-    # x_traintest, X_holdout, y_traintest, y_holdout = df2.drop(columns=[f'N_{num}'])[:start_test_date], df2.drop(columns=[f'N_{num}'])[start_test_date:], df2[[f'N_{num}']][:start_test_date], df2[[f'N_{num}']][start_test_date:]
-    
-    # dropout = trial.suggest_float("dropout", 0.01, 0.09, step=0.02)
+def train_test_split_by_date(x, y, start_date):
+    ind = y[:start_date].shape[0]
+    X_traintest = x[:ind-1]
+    X_holdout   = x[ind:]
+    y_traintest = y[:ind-1]
+    y_holdout   = y[ind:]
+    return X_traintest, X_holdout, y_traintest, y_holdout
+
+def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune_params = {'n_trials':50, 'timeout_secunds':3600*3}, random_seed = 42, verbose_=1, test_size=None, start_test_date=None):
+    if test_size is not None:
+        X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
+    elif start_test_date is not None:
+        X_traintest, X_holdout, y_traintest, y_holdout = train_test_split_by_date(x, y, start_test_date)
     t_initial0 = time.time()
-    X_train, X_test, y_train, y_test = train_test_split(x_traintest, y_traintest,
-                                                                                    test_size=test_size,
-                                                                                    random_state=42,
-                                                                                    shuffle=False)
+    X_train, X_test, y_train, y_test = train_test_split(X_traintest, y_traintest,
+                                                        test_size=test_size,
+                                                        random_state=42,
+                                                        shuffle=False)
+    print(X_train, X_test, y_train, y_test)
 
     if tune:
         def objective(trial):
@@ -203,14 +212,16 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 }, 
                      random_seed = 42, 
                      verbose_=0, 
-                     test_size=0.175):
+                     test_size=None, 
+                     start_test_date=None):
+    if test_size is not None:
+        train_test_range = int(len(x)*(1-test_size))
+        X_traintest, X_holdout, y_traintest, y_holdout = x[:train_test_range], x[train_test_range:], y[:train_test_range], y[train_test_range:]    
+    elif start_test_date is not None:
+        X_traintest, X_holdout, y_traintest, y_holdout = train_test_split_by_date(x, y, start_test_date)
     t_initial0 = time.time()
-    # x_traintest, X_holdout, y_traintest, y_holdout = df2.drop(columns=[f'N_{num}'])[:start_test_date], df2.drop(columns=[f'N_{num}'])[start_test_date:], df2[[f'N_{num}']][:start_test_date], df2[[f'N_{num}']][start_test_date:]
-    # x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=0.2)
-    train_test_range = int(len(x)*(1-test_size))
-    x_traintest, X_holdout, y_traintest, y_holdout = x[:train_test_range], x[train_test_range:], y[:train_test_range], y[train_test_range:]
-    train_range = int(len(x_traintest)*(0.8))
-    X_train, X_test, y_train, y_test = x_traintest[:train_range], x_traintest[train_range:], y_traintest[:train_range], y_traintest[train_range:]
+    train_range = int(len(X_traintest)*(0.8))
+    X_train, X_test, y_train, y_test = X_traintest[:train_range], X_traintest[train_range:], y_traintest[:train_range], y_traintest[train_range:]
     if tune:
         def objective(trial):
             t_initial = time.time()
@@ -263,6 +274,7 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
         print("Подбор гиперпараметров окончен.")
         print('best_params=', best_params)
     else:
+        print(params)
         units0 = params['units0']
         activate1 = params['activate1']
         activate3 = params['activate3']
@@ -326,13 +338,17 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
                      tune = False, 
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 },
                      verbose_=0, 
-                     test_size=0.175):
+                     test_size=None, 
+                     start_test_date=None):
     t_initial0 = time.time()
-    x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
-    X_train, X_test, y_train, y_test = train_test_split(x_traintest, y_traintest,
-                                                                                    test_size=0.20,
-                                                                                    random_state=42,
-                                                                                    shuffle=False)
+    if test_size is not None:
+        X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
+    elif start_test_date is not None:
+        X_traintest, X_holdout, y_traintest, y_holdout = train_test_split_by_date(x, y, start_test_date)
+    X_train, X_test, y_train, y_test = train_test_split(X_traintest, y_traintest,
+                                                        test_size=0.20,
+                                                        random_state=42,
+                                                        shuffle=False)
     train_pool = Pool(X_train, label=y_train)
     test_pool = Pool(X_test, label=y_test)
 
@@ -358,7 +374,8 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
                 train_pool,
                 eval_set=test_pool,
                 verbose=verbose_,
-                plot=False
+                plot=False,
+                early_stopping_rounds=100
             )
             # err = model_with_early_stop.best_score_['validation'][params['loss_func']]
             err = model_with_early_stop.predict(X_test)
@@ -385,22 +402,23 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
         l2_leaf_reg=params['l2_leaf_reg'],
         depth = params['depth'],
         loss_function=params['loss_func'],
-        early_stopping_rounds=15
+        early_stopping_rounds=150
     )
 
     history = model_with_early_stop.fit(
         train_pool,
         eval_set=test_pool,
         verbose=verbose_,
-        plot=False
+        plot=False,
+        early_stopping_rounds=100
     )
     # Evaluate the model using CatBoost's log loss and F1 score
     metrics_train = model_with_early_stop.eval_metrics(train_pool, 
                                                         metrics=params['loss_func'], 
-                                                        plot=True)
+                                                        plot=False)
     metrics_test = model_with_early_stop.eval_metrics(test_pool, 
                                                         metrics=params['loss_func'], 
-                                                        plot=True)
+                                                        plot=False)
     df_err = y_holdout.copy()
     df_err[f'N_pred_{num}'] = model_with_early_stop.predict(pd.DataFrame(X_holdout))
     # print(df_err)
@@ -423,10 +441,14 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
                      tune = False, 
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 }, 
                      verbose_=0,
-                     test_size=0.175):
+                     test_size=None, 
+                     start_test_date=None):
     t_initial0 = time.time()
-    x_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
-    X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(x_traintest, y_traintest,
+    if test_size is not None:
+        X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
+    elif start_test_date is not None:
+        X_traintest, X_holdout, y_traintest, y_holdout = train_test_split_by_date(x, y, start_test_date)
+    X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(X_traintest, y_traintest,
                                                                                     test_size=0.20,
                                                                                     random_state=42,
                                                                                     shuffle=False)
@@ -459,7 +481,7 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
             t0 = time.time()
             timer_callback = lambda env: time_arr.append(time.time() - t0)
             history_callback = {}
-            early_stopping_callback = lgb.early_stopping(150, first_metric_only=False, verbose=True, min_delta=0.0)
+            early_stopping_callback = lgb.early_stopping(200, first_metric_only=False, verbose=True, min_delta=0.0)
             est = lgb.train(params_train, train_data, valid_sets=test_data, num_boost_round=epoches,
                             callbacks=[timer_callback, lgb.record_evaluation(history_callback), early_stopping_callback, lgb.log_evaluation(period=verbose_)])       #categorical_feature=category_indices
             err = est.predict(X_test)
@@ -509,6 +531,7 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
                     callbacks=[timer_callback, lgb.record_evaluation(history_callback), early_stopping_callback, lgb.log_evaluation(period=verbose_)])       #categorical_feature=category_indices
     df_err = y_holdout.copy()
     df_err[f'N_pred_{num}'] = est.predict(pd.DataFrame(X_holdout))
+    #fitting
     df_err[f'N_{num}'] = scally.inverse_transform(df_err[[f'N_{num}']])
     df_err[f'N_pred_{num}'] = scally.inverse_transform(df_err[[f'N_pred_{num}']])
     df_err = df_err.reindex(pd.date_range(df_err.index[0],df_err.index[-1], freq='H'), axis=0)

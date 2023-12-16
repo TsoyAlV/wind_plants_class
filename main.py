@@ -48,7 +48,7 @@ params = {
         }
 # Параметры для подбора гиперпараметров (число обучающих итераций и время в сек.)
 # fitting
-# tune_params = {'n_trials': 5,'timeout_secunds': 60*60*1} # Удалить и раскоментировать после отладки (пока нужно для проверки работы подбора гиперпараметров)
+# tune_params = {'n_trials': 2,'timeout_secunds': 60*2} # Удалить и раскоментировать после отладки (пока нужно для проверки работы подбора гиперпараметров)
 tune_params = {'n_trials': 50,'timeout_secunds': 3600 * 2}
 
 class Model:
@@ -63,16 +63,25 @@ class Model:
         self.model_name = model_name
         assert self.model_name in ['catboost','lgbm','fc_nn','lstm'], f"Модель '{model_name}' не нахоится в списке доступных: ['catboost','lgbm','fc_nn','lstm']"
         self.model_params = params[model_name]
+    
+    def get_available_GTPs(self, eng):
+        res = pd.read_sql_query(f"""select gtp_name from wind_gtp """, eng)
+        eng.dispose()
+        print(list(res.values.astype(str).T[0]))
 
-    def prep_all_data(self, loc_points, eng, name_gtp='GUK_3', Ncap=22.8):
+    def prep_all_data(self, loc_points, eng, name_gtp='GUK_3'):
         # пока не буду прорабатывать данную функцию полностью
-        self.Ncap = Ncap
         self.df_all, self.nums = first_prep_data(loc_points, 
                                                 eng=eng, 
                                                 name_gtp = name_gtp, 
                                                 start_date=str(datetime.datetime.now()-datetime.timedelta(days=365*3))[:10], 
                                                 end_date=str(datetime.datetime.now()-datetime.timedelta(days=1))[:10])
-    
+        res = pd.read_sql_query(f"""select gtp_power, gtp_id from wind_gtp where gtp_name = '{name_gtp}'""", eng)
+        assert res.shape == (1, 2), f'Не удалось найти конкретную выработку Ncap для дальнейшего расчета погрешности. Должно быть res.shape == (1, 2) а получилось {res.shape}'
+        self.Ncap = res.values[0][0]
+        self.gtp_id = int(res.values[0][1])
+        eng.dispose()    
+
     def prep_data(self, df_all, num):
         df, self.scallx, self.scally = do_scaling(df_all)
         df = df.dropna()
@@ -97,19 +106,20 @@ class Model:
             fit_by_setted_params - означает, что модель обучается с заданными по дефолту параметрами\n
             tune_params - означает, что будут подбираться гиперпараметры и создастся отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!!
         """
+        if num is None:
+            num = self.data['nums'][0]
+            print(f'Первое обучение производится по ветряку {num}')
         assert purpose in ['test', 'fit_by_setted_params', 'tune_params'], f'Аргумента функции fit_predict purpose="{purpose}" нет в списке доступных ["test", "fit_by_setted_params", "tune_params"]'
         self.purpose=purpose
         t_initial = time.time()
-
-
+        self.time_tune = datetime.datetime.now()
         # catboost
         if model_name == 'catboost':
             print(f"Начинаю расчет модели {model_name}")
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 10
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, 
-                                                                                    None, verbose, test_size=test_size)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, None, verbose, test_size=test_size)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1000
                 verbose = 0
@@ -225,13 +235,15 @@ class Pipeline_wind_forecast(Model):
         self.data['results']['df_err'] = dict()
         self.data['results']['trained_model'] = dict()
         self.data['results']['history'] = dict()
-        self.data['results']['best_params'] = dict()
+        # self.data['results']['best_params'] = dict()
 
-    def prep_all_data(self, loc_points, eng, name_gtp='GUK_3', Ncap=22.8):
-        super().prep_all_data(loc_points, eng, name_gtp, Ncap)
+    def prep_all_data(self, loc_points, eng, name_gtp='GUK_3'):
+        super().prep_all_data(loc_points, eng, name_gtp)
+        self.eng = eng
         self.data['Ncap'] = self.Ncap
         self.data['all_data'] = self.df_all
         self.data['nums'] = self.nums
+        self.name_gtp = name_gtp
 
     def form_dict_prep_data(self):
         for num in self.nums:
@@ -250,13 +262,16 @@ class Pipeline_wind_forecast(Model):
         # Удаляем последние (после выполнения функции эти временные параметры будут удлены)
         del self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm
 
-    def form_dict_fit_predict(self, num_to_fit, models=['catboost','lgbm','fc_nn','lstm'], test_size=0.175, purpose='fit_by_setted_params'):
+    def form_dict_fit_predict(self, num_to_fit=None, models=['catboost','lgbm','fc_nn','lstm'], test_size=0.175, purpose='fit_by_setted_params'):
         """
         purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']\n
             test - означает, что производится легкое обучение (25 итераций)\n
             fit_by_setted_params - означает, что модель обучается с заданными по дефолту параметрами\n
             tune_params - означает, что будут подбираться гиперпараметры и создастся отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!!
         """
+        if num_to_fit is None:
+            num_to_fit = self.data['nums'][0]
+            print(f'Первое обучение производится по ветряку {num_to_fit}')
         # Проверка ввода
         self.models['models'] = models
         available_models = ['catboost','lgbm','fc_nn','lstm']
@@ -280,7 +295,7 @@ class Pipeline_wind_forecast(Model):
             self.data['results']['df_err'][num]        = dict()
             self.data['results']['trained_model'][num] = dict()
             self.data['results']['history'][num]       = dict()
-            self.data['results']['best_params'][num]   = dict()
+            # self.data['results']['best_params'][num]   = dict()
 
             for model_name in self.models['models']:
                 print('------------------------------------------------')
@@ -413,6 +428,54 @@ class Pipeline_wind_forecast(Model):
                 plt.grid()
                 plt.show()
             print()
+
+    def describe(self, df_err=True, plots=True):
+        import plotly.express as px
+        df_all = pd.DataFrame()
+        for model in self.data['results']['df_err_windfarm'].keys():
+            tmp_df = self.data['results']['df_err_windfarm'][model][['N_sum','N_pred_sum']]
+            tmp_df.columns = ['N_sum', f'N_pred_{model}']
+            df_all = pd.concat([df_all, tmp_df], axis=1)
+        tmp_df = pd.DataFrame(df_all[['N_sum']].mean(axis=1), columns=['N_sum'])
+        df_all = df_all.drop(columns=['N_sum'])
+        df_all = pd.concat([tmp_df, df_all], axis=1)
+        
+        cols_to_describe = list(self.data['results']['df_err_windfarm'].keys())
+        cols_to_describe.append('naiv')
+        df_all['N_pred_naiv'] = df_all['N_sum'].shift(48)
+        for model in cols_to_describe:
+            df_all[f'err_{model}'] = (df_all['N_sum']-df_all[f'N_pred_{model}']).abs()*100/self.Ncap
+        df_all = df_all.dropna()
+        if df_err:
+            print(f'                            --------- Результат расчетов моделей прогнозирования ВЭС {self.name_gtp} --------- ')
+            try:
+                display(df_all.describe())
+            except:
+                print(df_all.describe())
+            print()
+        if plots:
+            N = px.line(df_all[[x for x in df_all.columns if 'N_' in x]], height=500, width=1250, title='N, МВт')
+            err = px.line(df_all[[x for x in df_all.columns if 'err_' in x]].rolling(24).mean(), height=500, width=1250, title='err, %')
+            print(f'                            --------- Фактические и прогнозные данные выработки ЭЭ по ВЭС "{self.name_gtp}" --------- ')
+            N.show()
+            print()
+            print(f'                            --------- График ошибок предсказания ЭЭ по ВЭС "{self.name_gtp}" по моделям --------- ')
+            err.show()
+
+    def upseart_best_params_to_db(self):
+        df_to_insert = pd.DataFrame([[pd.to_datetime(self.time_tune), self.gtp_id, 48, str(self.models['best_params'][model]).replace('\'', '"'), model] for model in self.models['models']], columns = ['init_date', 'gtp_id', 'hour_distance', 'model_name', 'optuna_data'])
+        values =  ','.join([str(i) for i in list(df_to_insert.to_records(index=False))])#.replace('"', "'")
+        query_string1 = f"""
+        INSERT INTO wind_best_params(init_date, gtp_id, hour_distance, optuna_data, model_name)
+        VALUES {values}
+        ON CONFLICT (init_date, gtp_id, hour_distance, model_name)
+        DO UPDATE SET optuna_data = excluded.optuna_data
+        """
+        with self.eng.connect() as connection:
+            result = connection.execute(query_string1)
+            result.close()
+            print(f'upseart_best_params_to_db result.rowcount={result.rowcount}, len(df_to_insert) = {len(df_to_insert)}')
+        return result.rowcount == len(df_to_insert)
 
 
 if __name__ == '__main__':
