@@ -6,7 +6,6 @@ import time
 
 from forming_data import *
 
-Ncap = 22.8
 
 # Параметры моделей (дефолтные)
 params = {
@@ -99,7 +98,7 @@ class Model:
         self.y_lstm = self.y_fc_nn.copy()
         return self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm, self.scallx, self.scally
 
-    def fit_predict(self, x, y, num, params, model_name, test_size=0.175, start_test_date=None, purpose='fit_by_setted_params'):
+    def fit_predict(self, x, y, num, params, model_name, epoches=1500, early_stopping_rounds=50, test_size=0.175, start_test_date=None, purpose='fit_by_setted_params'):
         """
         purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']\n
             test - означает, что производится легкое обучение (25 итераций)\n
@@ -119,15 +118,15 @@ class Model:
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 10
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, None, verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None, verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1000
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, False, None, verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None, verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'tune_params':
                 epoches = 1000
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, self.scally, self.Ncap, True, tune_params, verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, early_stopping_rounds, self.scally, self.Ncap, True, tune_params, verbose, test_size=test_size, start_test_date=start_test_date)
 
         # lgbm
         elif model_name == 'lgbm':
@@ -135,18 +134,18 @@ class Model:
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 10
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, self.scally, self.Ncap, False, 
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, 
                                                                                 None, verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1000
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, self.scally, self.Ncap, False, 
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, 
                                                                                 None, verbose, test_size=test_size, start_test_date=start_test_date)
 
             elif self.purpose == 'tune_params':
                 epoches = 1000
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, self.scally, self.Ncap, True, 
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, early_stopping_rounds, self.scally, self.Ncap, True, 
                                                                                 tune_params, verbose, test_size=test_size, start_test_date=start_test_date)
 
 
@@ -156,16 +155,15 @@ class Model:
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 1
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, False, None, 1,verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None, 1,verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1500
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, False, None, 1,verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None, 1,verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'tune_params':
                 epoches = 1500
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, self.scally, self.Ncap, True, 
-                                                                                                tune_params = tune_params, random_seed=1, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, early_stopping_rounds, self.scally, self.Ncap, True, tune_params = tune_params, random_seed=1, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
                 
 
         # LSTM
@@ -174,15 +172,15 @@ class Model:
             if self.purpose == 'test':
                 epoches = 250
                 verbose = 1
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, False, None,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
                 epoches = 1500
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, False, None,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'tune_params':
                 epoches = 1500
                 verbose = 0
-                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, self.scally, self.Ncap, True, tune_params,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
+                self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, early_stopping_rounds, self.scally, self.Ncap, True, tune_params,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
         
         # Считаем время выполнения расчета и отображение его в логах
         learning_time = round(float(f'{time.time() - t_initial:3.3f}'), 2)
@@ -255,13 +253,17 @@ class Pipeline_wind_forecast(Model):
         # Удаляем последние (после выполнения функции эти временные параметры будут удлены)
         del self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm
 
-    def form_dict_fit_predict(self, num_to_fit=None, models=['catboost','lgbm','fc_nn','lstm'], test_size=0.175, start_test_date=None, purpose='fit_by_setted_params'):
+    def form_dict_fit_predict(self, num_to_fit=None, models=['catboost','lgbm','fc_nn','lstm'], test_size=None, start_test_date=None, purpose='fit_by_setted_params'):
         """
         purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']\n
             test - означает, что производится легкое обучение (25 итераций)\n
             fit_by_setted_params - означает, что модель обучается с заданными по дефолту параметрами\n
             tune_params - означает, что будут подбираться гиперпараметры и создастся отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!!
         """
+        self.settings = dict()
+        self.settings['test_size'] = test_size
+        self.settings['start_test_date'] = start_test_date
+        self.settings['is_ansamble'] = False
         if num_to_fit is None:
             num_to_fit = self.data['nums'][0]
             print(f'Первое обучение производится по ветряку {num_to_fit}')
@@ -277,7 +279,7 @@ class Pipeline_wind_forecast(Model):
         for model_name in self.models['models']:
             x = self.data[f'x_{model_name}'][num_to_fit]
             y = self.data[f'y_{model_name}'][num_to_fit]
-            super().fit_predict(x, y, num_to_fit, params=self.default_params_per_model, model_name=model_name, test_size=test_size, purpose=purpose)
+            super().fit_predict(x, y, num_to_fit, params=self.default_params_per_model, model_name=model_name, test_size=test_size, start_test_date=self.settings['start_test_date'], purpose=purpose)
             self.models['df_err'][model_name] = self.df_err
             self.models['trained_model'][model_name] = self.model
             self.models['history'][model_name] = self.history
@@ -303,9 +305,9 @@ class Pipeline_wind_forecast(Model):
                 print(f'{num} params of model "{model_name}": ', params_to_forecast[model_name])
 
                 if self.purpose == 'test':
-                    super().fit_predict(x, y, num, params_to_forecast, model_name, test_size=test_size, purpose='test')
+                    super().fit_predict(x, y, num, params_to_forecast, model_name, test_size=test_size, start_test_date=self.settings['start_test_date'], purpose='test')
                 else:
-                    super().fit_predict(x, y, num, params_to_forecast, model_name, test_size=test_size, purpose='fit_by_setted_params')
+                    super().fit_predict(x, y, num, params_to_forecast, model_name, test_size=test_size, start_test_date=self.settings['start_test_date'], purpose='fit_by_setted_params')
                 self.data['results']['df_err'][num][model_name]        = self.df_err
                 self.data['results']['trained_model'][num][model_name] = self.model
                 self.data['results']['history'][num][model_name]       = self.history
@@ -331,11 +333,49 @@ class Pipeline_wind_forecast(Model):
             dict_sum_errs[model]['N_pred_sum'] = dict_sum_errs[model][[x for x in dict_sum_errs[model].columns if 'N_pred' in x]].sum(axis=1)
             dict_sum_errs[model] = dict_sum_errs[model].reindex(pd.date_range(dict_sum_errs[model].index[0], dict_sum_errs[model].index[-1], freq='1h'))
             dict_sum_errs[model]['N_naiv_sum'] = dict_sum_errs[model]['N_sum'].shift(48)
-            dict_sum_errs[model]['err'] = (dict_sum_errs[model]['N_sum'] - dict_sum_errs[model]['N_pred_sum']).abs()*100/Ncap
-            dict_sum_errs[model]['err_naiv'] = (dict_sum_errs[model]['N_sum'] - dict_sum_errs[model]['N_naiv_sum']).abs()*100/Ncap
+            dict_sum_errs[model]['err'] = (dict_sum_errs[model]['N_sum'] - dict_sum_errs[model]['N_pred_sum']).abs()*100/self.Ncap
+            dict_sum_errs[model]['err_naiv'] = (dict_sum_errs[model]['N_sum'] - dict_sum_errs[model]['N_naiv_sum']).abs()*100/self.Ncap
             dict_sum_errs[model] = dict_sum_errs[model][['N_sum', 'N_pred_sum', 'N_naiv_sum', 'err', 'err_naiv']].dropna()
             self.data['results']['df_err_windfarm'][model] = dict_sum_errs[model]
-        
+
+    def relearn_model(self, model_name, num, new_epoches=2000, new_early_stopping_range=200):
+        available_models = ['catboost','lgbm','fc_nn','lstm']
+        assert model_name in available_models, f"Модели нет в список допустимых ['catboost','lgbm','fc_nn','lstm']"
+        assert num in self.nums, f"Номера нет в списке допустимых {self.nums}"
+
+        # Обучаю один ветряк на каждый тип модели
+        x = self.data[f'x_{model_name}'][num]
+        y = self.data[f'y_{model_name}'][num]
+        if self.purpose == 'tune_params':
+            super().fit_predict(x, y, num, params=self.models['best_params'], model_name=model_name, epoches=new_epoches, early_stopping_rounds=new_early_stopping_range, test_size=self.settings['test_size'], start_test_date=self.settings['start_test_date'], purpose='fit_by_setted_params')
+        else:
+            super().fit_predict(x, y, num, params=self.default_params_per_model, model_name=model_name, epoches=new_epoches, early_stopping_rounds=new_early_stopping_range, test_size=self.settings['test_size'], start_test_date=self.settings['start_test_date'], purpose='fit_by_setted_params')
+        self.data['results']['df_err'][num][model_name]        = self.df_err
+        self.data['results']['trained_model'][num][model_name] = self.model
+        self.data['results']['history'][num][model_name]       = self.history
+        del self.df_err, self.model, self.history
+
+        # Результаты по всем ветрякам в сумме
+        self.data['results']['df_err_windfarm'] = dict()
+        dict_sum_errs = {}
+        dict_errs = {}
+        for model in self.models['models']:
+            dict_errs[model] = {}
+            dict_sum_errs[model] = pd.DataFrame()
+            for num in self.nums:
+                dict_errs[model][num] = self.data['results']['df_err'][num][model][[f'N_{num}',f'N_pred_{num}']]
+                dict_sum_errs[model] = pd.concat([dict_sum_errs[model], dict_errs[model][num]], axis=1)
+            dict_sum_errs[model]['N_sum'] = dict_sum_errs[model][[x for x in dict_sum_errs[model].columns if 'N_pred' not in x]].sum(axis=1)
+            dict_sum_errs[model]['N_pred_sum'] = dict_sum_errs[model][[x for x in dict_sum_errs[model].columns if 'N_pred' in x]].sum(axis=1)
+            dict_sum_errs[model] = dict_sum_errs[model].reindex(pd.date_range(dict_sum_errs[model].index[0], dict_sum_errs[model].index[-1], freq='1h'))
+            dict_sum_errs[model]['N_naiv_sum'] = dict_sum_errs[model]['N_sum'].shift(48)
+            dict_sum_errs[model]['err'] = (dict_sum_errs[model]['N_sum'] - dict_sum_errs[model]['N_pred_sum']).abs()*100/self.Ncap
+            dict_sum_errs[model]['err_naiv'] = (dict_sum_errs[model]['N_sum'] - dict_sum_errs[model]['N_naiv_sum']).abs()*100/self.Ncap
+            dict_sum_errs[model] = dict_sum_errs[model][['N_sum', 'N_pred_sum', 'N_naiv_sum', 'err', 'err_naiv']].dropna()
+            self.data['results']['df_err_windfarm'][model] = dict_sum_errs[model]
+        if self.settings['is_ansamble']:
+            self.do_ansamble()
+
     # Добавляю ансамбль моделей
     def do_ansamble(self, models=None):
         """
@@ -344,6 +384,7 @@ class Pipeline_wind_forecast(Model):
         В случае принудительного занесения аргумента "models" в функцию, данная опция отключается и ансамблирование производится по заданным пользователем моделям. \n
         Далее будут выбираться для ансамблирования модели 
         """
+        self.settings['is_ansamble'] = True
         # Если на задавать модели ансамблирования, то функция будет рассматривать используемые модели внутри класса
         if models is not None:
             # models = models
@@ -379,8 +420,8 @@ class Pipeline_wind_forecast(Model):
         df_err_all['N_pred_sum'] = df_err_all[[x for x in df_err_all.columns if 'N_pred' in x]].sum(axis=1)
         df_err_all = df_err_all.reindex(pd.date_range(df_err_all.index[0], df_err_all.index[-1], freq='1h'))
         df_err_all['N_naiv_sum'] = df_err_all['N_sum'].shift(48)
-        df_err_all['err'] = (df_err_all['N_sum'] - df_err_all['N_pred_sum']).abs()*100/Ncap
-        df_err_all['err_naiv'] = (df_err_all['N_sum'] - df_err_all['N_naiv_sum']).abs()*100/Ncap
+        df_err_all['err'] = (df_err_all['N_sum'] - df_err_all['N_pred_sum']).abs()*100/self.Ncap
+        df_err_all['err_naiv'] = (df_err_all['N_sum'] - df_err_all['N_naiv_sum']).abs()*100/self.Ncap
         df_err_all = df_err_all[['N_sum', 'N_pred_sum', 'N_naiv_sum', 'err', 'err_naiv']].dropna()
         self.data['results']['df_err_windfarm']['ansamble'] = df_err_all
 
@@ -491,7 +532,7 @@ if __name__ == '__main__':
                     [48.118266, 39.963142]]
     eng = create_engine('postgresql://postgres:achtung@192.168.251.133:5432/fortum_wind')
     pipeline = Pipeline_wind_forecast(['catboost','lgbm','fc_nn','lstm'])
-    pipeline.prep_all_data(loc_points, eng, name_gtp='GUK_3', Ncap=22.8)
+    pipeline.prep_all_data(loc_points, eng, name_gtp='GUK_3')
     pipeline.form_dict_prep_data()
     pipeline.form_dict_fit_predict(pipeline.nums[0], test_size=0.175, purpose='test')
     print(pipeline.__dict__.keys())

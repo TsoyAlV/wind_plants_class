@@ -17,7 +17,7 @@ def train_test_split_by_date(x, y, start_date):
     y_holdout   = y[ind:]
     return X_traintest, X_holdout, y_traintest, y_holdout
 
-def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune_params = {'n_trials':50, 'timeout_secunds':3600*3}, random_seed = 42, verbose_=1, test_size=None, start_test_date=None):
+def solve_model_fc_nn(x, y, num, params, epoches, early_stopping_rounds, scally, Ncap, tune=False, tune_params = {'n_trials':50, 'timeout_secunds':3600*3}, random_seed = 42, verbose_=1, test_size=None, start_test_date=None):
     if test_size is not None:
         X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
     elif start_test_date is not None:
@@ -27,8 +27,6 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
                                                         test_size=test_size,
                                                         random_state=42,
                                                         shuffle=False)
-    print(X_train, X_test, y_train, y_test)
-
     if tune:
         def objective(trial):
             best_params = {
@@ -57,7 +55,7 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
             add_units3 = best_params['add_units3']
             loss_func = best_params['loss_func']
 
-            earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=100, verbose=0, mode='min')
+            earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=early_stopping_rounds, verbose=0, mode='min')
             mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
             reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
             callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
@@ -134,7 +132,7 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
         loss_func = params['loss_func']
         best_params = None
 
-    earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=150, verbose=0, mode='min')
+    earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=early_stopping_rounds, verbose=0, mode='min')
     mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
     reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
     callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
@@ -207,7 +205,7 @@ def solve_model_fc_nn(x, y, num, params, epoches, scally, Ncap, tune=False, tune
     print(f'Время обучения мдели lstm составляет {time.time() - t_initial0:3.3f} c')   
     return df_err, nn1, history.history, best_params
 
-def solve_model_lstm(x, y, num, params, epoches, scally, Ncap, 
+def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, Ncap, 
                      tune = False, 
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 }, 
                      random_seed = 42, 
@@ -225,7 +223,7 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
     if tune:
         def objective(trial):
             t_initial = time.time()
-            earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=150, verbose=0, mode='min')
+            earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=early_stopping_rounds, verbose=0, mode='min')
             reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
             callbacks = [earlyStopping, reduce_lr_loss]
             best_params = {
@@ -281,7 +279,7 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
         learning_rate0 = params['learning_rate']
         loss_func0 = params['loss_func']
         best_params = None
-    earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=150, verbose=0, mode='min')
+    earlyStopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=early_stopping_rounds, verbose=0, mode='min')
     mcp_save = tf.keras.callbacks.ModelCheckpoint('tmp_callback.hdf5', save_best_only=True, monitor='val_loss', mode='min')
     reduce_lr_loss = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=33, verbose=0, mode='min')
     callbacks = [earlyStopping, mcp_save, reduce_lr_loss]
@@ -334,7 +332,7 @@ def solve_model_lstm(x, y, num, params, epoches, scally, Ncap,
     print(f'Время обучения мдели lstm составляет {time.time() - t_initial0:3.3f} c')   
     return df_err, nn1, history.history, best_params
 
-def solve_model_catboost(x,y, num, params, epoches, scally, Ncap, 
+def solve_model_catboost(x,y, num, params, epoches, early_stopping_rounds, scally, Ncap, 
                      tune = False, 
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 },
                      verbose_=0, 
@@ -367,7 +365,7 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
                 l2_leaf_reg=params['l2_leaf_reg'],
                 depth = params['depth'],
                 loss_function=params['loss_func'],
-                early_stopping_rounds=15
+                early_stopping_rounds=early_stopping_rounds
             )
 
             model_with_early_stop.fit(
@@ -375,7 +373,7 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
                 eval_set=test_pool,
                 verbose=verbose_,
                 plot=False,
-                early_stopping_rounds=100
+                early_stopping_rounds=early_stopping_rounds
             )
             # err = model_with_early_stop.best_score_['validation'][params['loss_func']]
             err = model_with_early_stop.predict(X_test)
@@ -402,7 +400,7 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
         l2_leaf_reg=params['l2_leaf_reg'],
         depth = params['depth'],
         loss_function=params['loss_func'],
-        early_stopping_rounds=150
+        early_stopping_rounds=early_stopping_rounds
     )
 
     history = model_with_early_stop.fit(
@@ -410,7 +408,7 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
         eval_set=test_pool,
         verbose=verbose_,
         plot=False,
-        early_stopping_rounds=100
+        early_stopping_rounds=early_stopping_rounds
     )
     # Evaluate the model using CatBoost's log loss and F1 score
     metrics_train = model_with_early_stop.eval_metrics(train_pool, 
@@ -421,7 +419,6 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
                                                         plot=False)
     df_err = y_holdout.copy()
     df_err[f'N_pred_{num}'] = model_with_early_stop.predict(pd.DataFrame(X_holdout))
-    # print(df_err)
     df_err[f'N_{num}'] = scally.inverse_transform(df_err[[f'N_{num}']])
     df_err[f'N_pred_{num}'] = scally.inverse_transform(df_err[[f'N_pred_{num}']])
     df_err = df_err.reindex(pd.date_range(df_err.index[0],df_err.index[-1], freq='H'), axis=0)
@@ -437,7 +434,7 @@ def solve_model_catboost(x,y, num, params, epoches, scally, Ncap,
     history = {'train':metrics_train, 'test':metrics_test}
     return df_err, model_with_early_stop, history, best_params
 
-def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap, 
+def solve_model_lgbm(x,y, num, params, epoches, early_stopping_rounds, scally, Ncap, 
                      tune = False, 
                      tune_params = { 'n_trials': 50,'timeout_secunds': 3600 * 3 }, 
                      verbose_=0,
@@ -481,7 +478,7 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
             t0 = time.time()
             timer_callback = lambda env: time_arr.append(time.time() - t0)
             history_callback = {}
-            early_stopping_callback = lgb.early_stopping(200, first_metric_only=False, verbose=True, min_delta=0.0)
+            early_stopping_callback = lgb.early_stopping(early_stopping_rounds, first_metric_only=False, verbose=True, min_delta=0.0)
             est = lgb.train(params_train, train_data, valid_sets=test_data, num_boost_round=epoches,
                             callbacks=[timer_callback, lgb.record_evaluation(history_callback), early_stopping_callback, lgb.log_evaluation(period=verbose_)])       #categorical_feature=category_indices
             err = est.predict(X_test)
@@ -526,7 +523,7 @@ def solve_model_lgbm(x,y, num, params, epoches, scally, Ncap,
     t0 = time.time()
     timer_callback = lambda env: time_arr.append(time.time() - t0)
     history_callback = {}
-    early_stopping_callback = lgb.early_stopping(50, first_metric_only=False, verbose=True, min_delta=0.0)
+    early_stopping_callback = lgb.early_stopping(early_stopping_rounds, first_metric_only=False, verbose=True, min_delta=0.0)
     est = lgb.train(params_train, train_data, valid_sets=test_data, num_boost_round=epoches,
                     callbacks=[timer_callback, lgb.record_evaluation(history_callback), early_stopping_callback, lgb.log_evaluation(period=verbose_)])       #categorical_feature=category_indices
     df_err = y_holdout.copy()
