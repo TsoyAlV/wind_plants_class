@@ -199,10 +199,9 @@ def solve_model_fc_nn(x, y, num, params, epoches, early_stopping_rounds, scally,
     df_err['naiv_err'] = df_err[f'N_{num}'] - df_err[f'N_naiv_{num}']
     df_err['abs_err']  = df_err['err'].abs()/Ncap*100
     df_err['abs_naiv_err'] = df_err['naiv_err'].abs()/Ncap*100
-    df_err = df_err.dropna()
+    # df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
-    print(f'Время обучения мдели lstm составляет {time.time() - t_initial0:3.3f} c')   
     return df_err, nn1, history.history, best_params
 
 def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, Ncap, 
@@ -326,10 +325,9 @@ def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, 
     df_err['naiv_err'] = df_err[f'N_{num}'] - df_err[f'N_naiv_{num}']
     df_err['abs_err']  = df_err['err'].abs()/Ncap*100
     df_err['abs_naiv_err'] = df_err['naiv_err'].abs()/Ncap*100
-    df_err = df_err.dropna()
+    # df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
-    print(f'Время обучения мдели lstm составляет {time.time() - t_initial0:3.3f} c')   
     return df_err, nn1, history.history, best_params
 
 def solve_model_catboost(x,y, num, params, epoches, early_stopping_rounds, scally, Ncap, 
@@ -427,10 +425,9 @@ def solve_model_catboost(x,y, num, params, epoches, early_stopping_rounds, scall
     df_err['naiv_err'] = df_err[f'N_{num}'] - df_err[f'N_naiv_{num}']
     df_err['abs_err']  = df_err['err'].abs()/Ncap*100
     df_err['abs_naiv_err'] = df_err['naiv_err'].abs()/Ncap*100
-    df_err = df_err.dropna()
+    # df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
-    print(f'Время обучения модели catboost составляет {time.time() - t_initial0:3.3f} c')   
     history = {'train':metrics_train, 'test':metrics_test}
     return df_err, model_with_early_stop, history, best_params
 
@@ -536,8 +533,7 @@ def solve_model_lgbm(x,y, num, params, epoches, early_stopping_rounds, scally, N
     df_err['naiv_err'] = df_err[f'N_{num}'] - df_err[f'N_naiv_{num}']
     df_err['abs_err']  = df_err['err'].abs()/Ncap*100
     df_err['abs_naiv_err'] = df_err['naiv_err'].abs()/Ncap*100
-    df_err = df_err.dropna()
+    # df_err = df_err.dropna()
     print(f'Ошибка прогноза составляет {round(df_err.abs_err.mean(), 3)}')
     print(f'Ошибка наивной модели составляет {round(df_err.abs_naiv_err.mean(), 3)}')
-    print(f'Время обучения модели lgbm составляет {time.time() - t_initial0:3.3f} c')   
     return df_err, est, history_callback, best_params

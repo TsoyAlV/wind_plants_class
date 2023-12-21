@@ -8,3 +8,5 @@ tmp_callback.hdf5
 __init__.py
 pipeline_example.pipeline
 *.ipynb
+results
+*.zip

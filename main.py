@@ -46,7 +46,6 @@ params = {
         'loss_func': 'mae'}
         }
 # Параметры для подбора гиперпараметров (число обучающих итераций и время в сек.)
-# fitting
 # tune_params = {'n_trials': 2,'timeout_secunds': 60*2} # Удалить и раскоментировать после отладки (пока нужно для проверки работы подбора гиперпараметров)
 tune_params = {'n_trials': 50,'timeout_secunds': 3600 * 2}
 
@@ -67,6 +66,7 @@ class Model:
         res = pd.read_sql_query(f"""select gtp_name from wind_gtp """, eng)
         eng.dispose()
         print(list(res.values.astype(str).T[0]))
+        return res.values.astype(str).T[0]
 
     def prep_all_data(self, loc_points, eng, name_gtp='GUK_3'):
         # пока не буду прорабатывать данную функцию полностью
@@ -75,6 +75,7 @@ class Model:
                                                 name_gtp = name_gtp, 
                                                 start_date=str(datetime.datetime.now()-datetime.timedelta(days=365*3))[:10], 
                                                 end_date=str(datetime.datetime.now()-datetime.timedelta(days=1))[:10])
+        self.nums.sort()
         res = pd.read_sql_query(f"""select gtp_power, gtp_id from wind_gtp where gtp_name = '{name_gtp}'""", eng)
         assert res.shape == (1, 2), f'Не удалось найти конкретную выработку Ncap для дальнейшего расчета погрешности. Должно быть res.shape == (1, 2) а получилось {res.shape}'
         self.Ncap = res.values[0][0]
@@ -111,12 +112,11 @@ class Model:
         assert purpose in ['test', 'fit_by_setted_params', 'tune_params'], f'Аргумента функции fit_predict purpose="{purpose}" нет в списке доступных ["test", "fit_by_setted_params", "tune_params"]'
         self.purpose=purpose
         t_initial = time.time()
-        self.time_tune = datetime.datetime.now()
         # catboost
         if model_name == 'catboost':
             print(f"Начинаю расчет модели {model_name}")
             if self.purpose == 'test':
-                epoches = 250
+                epoches = 25
                 verbose = 10
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_catboost(x, y, num, params['catboost'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None, verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
@@ -132,7 +132,7 @@ class Model:
         elif model_name == 'lgbm':
             print(f"Начинаю расчет модели {model_name}")
             if self.purpose == 'test':
-                epoches = 250
+                epoches = 25
                 verbose = 10
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_lgbm(x, y, num, params['lgbm'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, 
                                                                                 None, verbose, test_size=test_size, start_test_date=start_test_date)
@@ -153,7 +153,7 @@ class Model:
         elif model_name == 'fc_nn':
             print(f"Начинаю расчет модели {model_name}")
             if self.purpose == 'test':
-                epoches = 250
+                epoches = 25
                 verbose = 1
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_fc_nn(x, y, num, params['fc_nn'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None, 1,verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
@@ -170,7 +170,7 @@ class Model:
         elif model_name == 'lstm':
             print(f"Начинаю расчет модели {model_name}")
             if self.purpose == 'test':
-                epoches = 250
+                epoches = 25
                 verbose = 1
                 self.df_err, self.model, self.history, self.best_params = models.solve_model_lstm(x, y, num, params['lstm'], epoches, early_stopping_rounds, self.scally, self.Ncap, False, None,  random_seed = 42, verbose_=verbose, test_size=test_size, start_test_date=start_test_date)
             elif self.purpose == 'fit_by_setted_params':
@@ -267,6 +267,7 @@ class Pipeline_wind_forecast(Model):
         if num_to_fit is None:
             num_to_fit = self.data['nums'][0]
             print(f'Первое обучение производится по ветряку {num_to_fit}')
+        self.time_tune = datetime.datetime.now()
         # Проверка ввода
         self.models['models'] = models
         available_models = ['catboost','lgbm','fc_nn','lstm']
@@ -463,7 +464,7 @@ class Pipeline_wind_forecast(Model):
                 plt.show()
             print()
 
-    def describe(self, df_err=True, plots=True):
+    def get_description(self, df_err=True, plots=True):
         import plotly.express as px
         df_all = pd.DataFrame()
         for model in self.data['results']['df_err_windfarm'].keys():
@@ -480,27 +481,28 @@ class Pipeline_wind_forecast(Model):
         for model in cols_to_describe:
             df_all[f'err_{model}'] = (df_all['N_sum']-df_all[f'N_pred_{model}']).abs()*100/self.Ncap
         df_all = df_all.dropna()
-        if df_err:
-            print(f'                            --------- Результат расчетов моделей прогнозирования ВЭС {self.name_gtp} --------- ')
-            try:
-                display(df_all.describe())
-            except:
-                print(df_all.describe())
-            print()
+        # if df_err:
+        #     print(f'                            --------- Результат расчетов моделей прогнозирования ВЭС {self.name_gtp} --------- ')
+        #     try:
+        #         display(df_all.describe())
+        #     except:
+        #         print(df_all.describe())
+        #     print()
         if plots:
             N = px.line(df_all[[x for x in df_all.columns if 'N_' in x]], height=500, width=1250, title='N, МВт')
             err = px.line(df_all[[x for x in df_all.columns if 'err_' in x]].rolling(24).mean(), height=500, width=1250, title='err, %')
-            print(f'                            --------- Фактические и прогнозные данные выработки ЭЭ по ВЭС "{self.name_gtp}" --------- ')
-            N.show()
-            print()
-            print(f'                            --------- График ошибок предсказания ЭЭ по ВЭС "{self.name_gtp}" по моделям --------- ')
-            err.show()
+            # print(f'                            --------- Фактические и прогнозные данные выработки ЭЭ по ВЭС "{self.name_gtp}" --------- ')
+            # # N.show()
+            # print()
+            # print(f'                            --------- График ошибок предсказания ЭЭ по ВЭС "{self.name_gtp}" по моделям --------- ')
+            # # err.show()
+        return df_all.describe(), N, err
 
     def upseart_best_params_to_db(self):
-        df_to_insert = pd.DataFrame([[pd.to_datetime(self.time_tune), self.gtp_id, 48, str(self.models['best_params'][model]).replace('\'', '"'), model] for model in self.models['models']], columns = ['init_date', 'gtp_id', 'hour_distance', 'model_name', 'optuna_data'])
+        df_to_insert = pd.DataFrame([[pd.to_datetime(self.time_tune), self.gtp_id, 48, str(self.models['best_params'][model]).replace('\'', '"'), model, self.data['results']['df_err_windfarm'][model].describe()[['err']].iloc[[1],[0]].values[0][0], len(self.data['results']['df_err_windfarm'][model])] for model in self.models['models']], columns = ['init_date', 'gtp_id', 'hour_distance', 'optuna_data','model_name', 'error', 'count_rows'])
         values =  ','.join([str(i) for i in list(df_to_insert.to_records(index=False))])#.replace('"', "'")
         query_string1 = f"""
-        INSERT INTO wind_best_params(init_date, gtp_id, hour_distance, optuna_data, model_name)
+        INSERT INTO wind_best_params(init_date, gtp_id, hour_distance, optuna_data, model_name, error, count_rows)
         VALUES {values}
         ON CONFLICT (init_date, gtp_id, hour_distance, model_name)
         DO UPDATE SET optuna_data = excluded.optuna_data
@@ -511,6 +513,75 @@ class Pipeline_wind_forecast(Model):
             print(f'upseart_best_params_to_db result.rowcount={result.rowcount}, len(df_to_insert) = {len(df_to_insert)}')
         return result.rowcount == len(df_to_insert)
 
+    def save_models(self):
+        """
+        Функция для сохранения полученных моделей.
+        Далее приведены примеры для получения моделей внутри языка python:
+        catboost_model = catboost.CatBoostRegressor() 
+        catboost_model.load_model('03_catboost.h5')
+        lgb_model = lgb.Booster(model_file='03_lgbm.h5')
+        fc_nn_model = tf.keras.models.load_model('03_fc_nn.h5')
+        lstm_model = tf.keras.models.load_model('03_lstm.h5')
+        """
+        folder = 'results'
+        # сохраняю данные в файл zip
+        from zipfile import ZipFile
+        import os
+        import catboost
+        import lightgbm as lgb
+        import tensorflow as tf
+
+        lst_models = []
+        for num in self.data['results']['trained_model'].keys():
+            for model in self.models['models']:
+                lst_models.append(f'{model}_{num}.h5')
+                if model == 'catboost':
+                    self.data['results']['trained_model'][num][model].save_model(f'{model}_{num}.h5')
+                elif model == 'lgbm':
+                    self.data['results']['trained_model'][num][model].save_model(f'{model}_{num}.h5')
+                elif model in ['fc_nn', 'lstm']:
+                    self.data['results']['trained_model'][num][model].save(f'{model}_{num}.h5')
+
+        name_zip_file = f"models_{str(self.time_tune)[:19].replace(':','.').replace(' ','_')}.zip"
+        with ZipFile(name_zip_file, "w") as myzip:
+            pass
+        with ZipFile(name_zip_file, "a") as myzip:
+            for file in lst_models:
+                myzip.write(file)
+        for file in lst_models:
+            os.remove(file)
+        path_to_file = f'./{folder}/'+name_zip_file
+        os.replace(name_zip_file, path_to_file)
+        print(f'Архив с моделями сохранен в директории "{path_to_file}"')
+        return path_to_file
+
+    def save_data(self):
+        """
+        Далее приведены примеры для получения данных внутри языка python:
+        with open('data.dat', 'rb') as f:
+            data_to_save = dill.load(f)
+        """
+        import os
+        folder = 'results'
+        name_data = f"data_{str(self.__dict__['time_tune'])[:19].replace(':','.').replace(' ','_')}.dat"
+        data_to_save = dict()
+        for key in self.data.keys():
+            if key == 'results':
+                data_to_save[key] = dict()
+                for key_res in self.data['results'].keys():
+                    if key_res == 'trained_model':
+                        pass
+                    else:
+                        data_to_save[key][key_res] = self.data['results'][key_res]
+            else:
+                data_to_save[key] = self.data[key]
+            # Добавляю сюда results
+        with open(name_data, 'wb') as f:
+            dill.dump(data_to_save, f)
+        path_to_file = f'./{folder}/'+name_data
+        os.replace(name_data, path_to_file)
+        print(f'Файл с данными сохранен в директории "{path_to_file}"')
+        return path_to_file
 
 if __name__ == '__main__':
     loc_points = [[48.117803, 39.977637],
