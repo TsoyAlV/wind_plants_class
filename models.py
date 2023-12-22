@@ -10,6 +10,13 @@ import optuna
 
 
 def train_test_split_by_date(x, y, start_date):
+    """
+    Функция, которая делит датафрейм на трейн и тест части
+    На входе: 
+        - x - датафрейм с признаками
+        - y - таргет
+        - start_date - дата-время - старт тестовых данных
+    """
     ind = y[:start_date].shape[0]
     X_traintest = x[:ind-1]
     X_holdout   = x[ind:]
@@ -18,6 +25,24 @@ def train_test_split_by_date(x, y, start_date):
     return X_traintest, X_holdout, y_traintest, y_holdout
 
 def solve_model_fc_nn(x, y, num, params, epoches, early_stopping_rounds, scally, Ncap, tune=False, tune_params = {'n_trials':50, 'timeout_secunds':3600*3}, random_seed = 42, verbose_=1, test_size=None, start_test_date=None):
+    """
+    Функция для обучения модели нейронной полносвязной сети
+    На входе:
+        - x - датайрейм с признаками для обучения модели
+        - y - датайрейм с таргетами для обучения модели
+        - num - номер ветряка 
+        - params - гиперпараметры для прогнозирования (заданные). В случае, если tune=True не будут учитываться
+        - epoches - число эпох предсказания
+        - early_stopping_rounds - число эпох, в случае, если нет улучшения за этот период, обучение останавливается
+        - scally - шкалирование таргета
+        - Ncap - коэффициент для оценки точности (обычно максимальная выработка по всем ветрякам ГТП)
+        - tune - является ли тип расчета с подбором гиперпараметров
+        - tune_params - параметры характеризуют, какое количество или сколько времени уделить на подбор гиперпараметров для данной модели
+        - random_seed - функция создания модели прогнозирования задает фиксированное значение random seed. Это необходимо для более контролируемого процесса получения и сравнения результатов обучения модели
+        - verbose_ - отображать процесс обучения или нет (0 - не отображать)
+        - test_size - размер тестовой выборки (опционально - выбрать либо test_size либо start_test_date)
+        - start_test_date - старт тестирования данных (опционально - выбрать либо test_size либо start_test_date)
+    """
     if test_size is not None:
         X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
     elif start_test_date is not None:
@@ -211,6 +236,24 @@ def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, 
                      verbose_=0, 
                      test_size=None, 
                      start_test_date=None):
+    """
+    Функция для обучения модели LSTM типа МО нейронными сетями
+    На входе:
+        - x - датайрейм с признаками для обучения модели
+        - y - датайрейм с таргетами для обучения модели
+        - num - номер ветряка 
+        - params - гиперпараметры для прогнозирования (заданные). В случае, если tune=True не будут учитываться
+        - epoches - число эпох предсказания
+        - early_stopping_rounds - число эпох, в случае, если нет улучшения за этот период, обучение останавливается
+        - scally - шкалирование таргета
+        - Ncap - коэффициент для оценки точности (обычно максимальная выработка по всем ветрякам ГТП)
+        - tune - является ли тип расчета с подбором гиперпараметров
+        - tune_params - параметры характеризуют, какое количество или сколько времени уделить на подбор гиперпараметров для данной модели
+        - random_seed - функция создания модели прогнозирования задает фиксированное значение random seed. Это необходимо для более контролируемого процесса получения и сравнения результатов обучения модели
+        - verbose_ - отображать процесс обучения или нет (0 - не отображать)
+        - test_size - размер тестовой выборки (опционально - выбрать либо test_size либо start_test_date)
+        - start_test_date - старт тестирования данных (опционально - выбрать либо test_size либо start_test_date)
+    """
     if test_size is not None:
         train_test_range = int(len(x)*(1-test_size))
         X_traintest, X_holdout, y_traintest, y_holdout = x[:train_test_range], x[train_test_range:], y[:train_test_range], y[train_test_range:]    
@@ -227,8 +270,8 @@ def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, 
             callbacks = [earlyStopping, reduce_lr_loss]
             best_params = {
                 'units0': trial.suggest_int('units0', 20, 80),
-                'activate1': trial.suggest_categorical('activate1', ['sigmoid','selu']),
-                'activate3': trial.suggest_categorical('activate3',['selu','relu','linear']),
+                'activate1': trial.suggest_categorical('activate1', ['sigmoid']),
+                'activate3': trial.suggest_categorical('activate3', ['selu','relu','linear']),
                 'learning_rate': trial.suggest_float('learning_rate', 0.0001, 0.03),
                 'loss_func': trial.suggest_categorical('loss_func', ['mae','mse'])
             }
@@ -336,6 +379,24 @@ def solve_model_catboost(x,y, num, params, epoches, early_stopping_rounds, scall
                      verbose_=0, 
                      test_size=None, 
                      start_test_date=None):
+    """
+    Функция для обучения модели CatBoost типа МО - бустинг 
+    На входе:
+        - x - датайрейм с признаками для обучения модели
+        - y - датайрейм с таргетами для обучения модели
+        - num - номер ветряка 
+        - params - гиперпараметры для прогнозирования (заданные). В случае, если tune=True не будут учитываться
+        - epoches - число эпох предсказания
+        - early_stopping_rounds - число эпох, в случае, если нет улучшения за этот период, обучение останавливается
+        - scally - шкалирование таргета
+        - Ncap - коэффициент для оценки точности (обычно максимальная выработка по всем ветрякам ГТП)
+        - tune - является ли тип расчета с подбором гиперпараметров
+        - tune_params - параметры характеризуют, какое количество или сколько времени уделить на подбор гиперпараметров для данной модели
+        - random_seed - функция создания модели прогнозирования задает фиксированное значение random seed. Это необходимо для более контролируемого процесса получения и сравнения результатов обучения модели
+        - verbose_ - отображать процесс обучения или нет (0 - не отображать)
+        - test_size - размер тестовой выборки (опционально - выбрать либо test_size либо start_test_date)
+        - start_test_date - старт тестирования данных (опционально - выбрать либо test_size либо start_test_date)
+    """
     t_initial0 = time.time()
     if test_size is not None:
         X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
@@ -437,6 +498,24 @@ def solve_model_lgbm(x,y, num, params, epoches, early_stopping_rounds, scally, N
                      verbose_=0,
                      test_size=None, 
                      start_test_date=None):
+    """
+    Функция для обучения модели LightGBM типа МО - бустинг 
+    На входе:
+        - x - датайрейм с признаками для обучения модели
+        - y - датайрейм с таргетами для обучения модели
+        - num - номер ветряка 
+        - params - гиперпараметры для прогнозирования (заданные). В случае, если tune=True не будут учитываться
+        - epoches - число эпох предсказания
+        - early_stopping_rounds - число эпох, в случае, если нет улучшения за этот период, обучение останавливается
+        - scally - шкалирование таргета
+        - Ncap - коэффициент для оценки точности (обычно максимальная выработка по всем ветрякам ГТП)
+        - tune - является ли тип расчета с подбором гиперпараметров
+        - tune_params - параметры характеризуют, какое количество или сколько времени уделить на подбор гиперпараметров для данной модели
+        - random_seed - функция создания модели прогнозирования задает фиксированное значение random seed. Это необходимо для более контролируемого процесса получения и сравнения результатов обучения модели
+        - verbose_ - отображать процесс обучения или нет (0 - не отображать)
+        - test_size - размер тестовой выборки (опционально - выбрать либо test_size либо start_test_date)
+        - start_test_date - старт тестирования данных (опционально - выбрать либо test_size либо start_test_date)
+    """
     t_initial0 = time.time()
     if test_size is not None:
         X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)

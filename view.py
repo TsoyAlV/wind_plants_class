@@ -26,7 +26,7 @@ select_gtp_from_dd = html.Div([
 header_1_0 = html.Div([html.H1('Прогнозирование выработки ЭЭ на ВЭС')], style={'text-align': 'center',
                                                                                       'margin-left':'auto',
                                                                                       'margin-right':'auto'})
-header_1_1 = html.P("""Выберите ГТП из списка:""", 'children')
+header_1_1 = html.H4("""Выберите ГТП из списка:""", 'children')
 header_1_button = html.Div([html.Button('Показать график', id='button-get-graph-N-by-nums', 
                                         n_clicks=0,  style={'text-align': 'center', 'margin-left':'auto', 'margin-right':'auto',
                                                             'font-size':18, 'height':30, 'margin-bottom':0, 'margin-top':25}),
@@ -60,7 +60,7 @@ def render_fig_N_by_num(btn, gtp):
     return res, ''
 
 _start_date = dcc.DatePickerSingle(id='date-picker-single', display_format='Y-M-D', date=date(2022, 5, 10))
-start_date = html.Div([html.P('Старт тестовых данных и тип расчета:'), _start_date])
+start_date = html.Div([html.H4('Старт тестируемых данных:'), _start_date])
 _purpose = dcc.Dropdown(['test', 'fit_by_setted_params', 'tune_params'], 'test', id='demo-dropdown-purpose')
 _do_results_button = html.Div([html.Button('Выполнить обучение', id='button-start-pipeline', n_clicks=0, 
                                            style={'text-align': 'center',
@@ -68,8 +68,14 @@ _do_results_button = html.Div([html.Button('Выполнить обучение'
                                            'margin-right':'auto',
                                            'font-size':18, 'height':30, 'margin-bottom':0, 'margin-top':0, 'float':'top'}), 
                                            dcc.Loading(id="ls-loading-1", children=[html.Div(id="ls-loading-output-learn")], type="default", style={'float':'top', 'margin-bottom':0, 'margin-top': 0, 'height':100})], style={'margin-bottom':20})
-# 'font-size':18, 'height':30, 'margin-top':40
-do_results = html.Div([html.P('Выберите тип расчета:'), 
+description_of_types = html.Div([
+    html.P('test - производится обучение в 25 итераций (предназначается для отладки приложения и теста его работы)'),
+    html.P('fit_by_setted_params - производится обучение с заданными по дефолту гиперпараметрами'),
+    html.P('tune_params - производится обучение с подбором гиперпараметров и создается отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!! (1-2ч)'),
+], style={'margin-left':40, 'margin-top':20, 'margin-bottom':20})
+
+do_results = html.Div([html.H4('Выберите тип расчета:'), 
+                       description_of_types,
                        _purpose, html.Br(),
                        _do_results_button,
                        html.Br()])
@@ -111,8 +117,8 @@ def render_content(value):
         try:
             pipeline.settings
             descr, N, err = pipeline.get_description()
+            descr = descr.round(4)
             descr['description'] = descr.index
-            descr.round(4)
             descr = pd.concat([descr[['description']], descr.iloc[:,:-1]], axis=1)
             table = html.Div(dash_table.DataTable(descr.to_dict('records'), [{"name": i, "id": i} for i in descr.columns]), style={'width':1000, 'margin-left':40})
             fig_N = dcc.Graph(id='fig_N', figure=N, animate=True)
@@ -151,6 +157,7 @@ def render_content(value):
                         tmp_df = pd.concat([tmp_df, tmp_df_2], axis=1)
                 tmp_df.index.name = 'epoches'
                 dict_of_learning_results[model] = tmp_df
+            # dict_of_learning_results = pipeline.plot_lerning_process()
 
             graph_to_display = html.Div([dcc.Graph(id=f"learning_process_plot_{model}", figure=px.line(dict_of_learning_results[model], title=model), animate=True) for model in pipeline.models['models']])
 
@@ -275,7 +282,6 @@ def save_buttons(purpose, bests, models, data):
         else:
             msg = 'Расчет выполнен без подбора гиперпараметров. Для сохранения в БД "best_params" необходимо обучить с подбором гиперпараметов - тип расчета "tune_params"'
         status_save = html.P(msg)
-        print(msg)
     elif "btn-save-models" == ctx.triggered_id:
         path_to_file = pipeline.save_models()
         down_models = dcc.send_file(f"{path_to_file}")
@@ -286,4 +292,4 @@ def save_buttons(purpose, bests, models, data):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False, port=8010) # Run the Dash app
+    app.run_server(debug=True, port=8010, host='192.168.252.225') # Run the Dash app

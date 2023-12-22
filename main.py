@@ -51,7 +51,11 @@ tune_params = {'n_trials': 50,'timeout_secunds': 3600 * 2}
 
 class Model:
     """
-    Необходимо выбрать модель среди ['catboost','lgbm','fc_nn','lstm'] а так же оптионально свои параметры настройки и метрику
+    Необходимо выбрать модель среди ['catboost','lgbm','fc_nn','lstm'] а так же оптионально свои параметры настройки и метрику.
+    Класс содержит:
+        - методы по формированию данных для обучения и прогноза,
+        - метод для предсказания.
+    Является родительским классом для основного класса Pipeline_wind_forecast
     """
     def __init__(self, model_name='catboost'):
         self.model = None
@@ -63,12 +67,29 @@ class Model:
         self.model_params = params[model_name]
     
     def get_available_GTPs(self, eng):
+        """
+        Метод для получения списка доступных ГТП
+        На входе - engine (подключение к БД)
+        На выходе - список доступных ГТП
+        """
         res = pd.read_sql_query(f"""select gtp_name from wind_gtp """, eng)
         eng.dispose()
         print(list(res.values.astype(str).T[0]))
         return res.values.astype(str).T[0]
 
     def prep_all_data(self, loc_points, eng, name_gtp='GUK_3'):
+        """
+        Метод готовит данные для всех ветряков заданной ГТП
+        На входе:
+            - loc_points - локации для проверки на наилучшую корреляцию # [[45.22, 43.5513],
+                                                                           [42.35, 43.5512],
+                                                                           ...............]]
+            - eng - подключение к БД
+            - name_gtp - наименование ГТП для формирования данных по всем ветрякам данной ГТП
+        На выходе:
+            - сохраняет внутри класса self.Ncap - коэффициент для оценки точности (обычно максимальная выработка по всем ветрякам ГТП)
+            - сохраняет внутри класса self.gtp_id 
+        """
         # пока не буду прорабатывать данную функцию полностью
         self.df_all, self.nums = first_prep_data(loc_points, 
                                                 eng=eng, 
@@ -83,6 +104,14 @@ class Model:
         eng.dispose()    
 
     def prep_data(self, df_all, num):
+        """
+        Метод готовит данные для конкретного ветряка по его номеру
+        На входе:
+            - df_all - датафрейм с данными по всем ветрякам
+            - num - номер ветряка
+        На выходе:
+            - self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm, self.scallx, self.scally - датафреймы для обучения и предсказания и MinMaxscaller's 
+        """
         df, self.scallx, self.scally = do_scaling(df_all)
         df = df.dropna()
         #trees
@@ -99,12 +128,24 @@ class Model:
         self.y_lstm = self.y_fc_nn.copy()
         return self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm, self.scallx, self.scally
 
-    def fit_predict(self, x, y, num, params, model_name, epoches=1500, early_stopping_rounds=50, test_size=0.175, start_test_date=None, purpose='fit_by_setted_params'):
+    def fit_predict(self, x, y, num, params, model_name, epoches=1500, early_stopping_rounds=50, test_size=None, start_test_date=None, purpose='fit_by_setted_params'):
         """
-        purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']\n
-            test - означает, что производится легкое обучение (25 итераций)\n
-            fit_by_setted_params - означает, что модель обучается с заданными по дефолту параметрами\n
-            tune_params - означает, что будут подбираться гиперпараметры и создастся отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!!
+        Метод производит прогнозирование по заданным параметрам:
+        Входные данные:
+            - x - датафрейм с признаками для прогнозирования
+            - y - датафрейм с таргетом
+            - num - номер ветряка
+            - model_name - модель предсказания, выбирается из списка ['catboost','lgbm','fc_nn','lstm']
+            - epoches - число эпох предсказания
+            - early_stopping_rounds - число эпох, в случае, если нет улучшения за этот период, обучение останавливается
+            - test_size - разделение на выборки тренировочную и тестовую (задается доля тестовой выборки к общему датафрейму от 0 до 1) по дефолту None (задание тестовой выборки выбирается либо test_size либо start_test_date)
+            - start_test_date - разделение на выборки тренировочную и тестовую путем задания времени старта тестовых данных по дефолту None (задание тестовой выборки выбирается либо test_size либо start_test_date)
+            - purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']
+               * test - означает, что производится легкое обучение (25 итераций)
+               * fit_by_setted_params - означает, что модель обучается с заданными по дефолту параметрами
+               * tune_params - означает, что будут подбираться гиперпараметры и создастся отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!!
+        Выходные данные:
+            - объекты класса self.df_err, self.model, self.history, self.best_params - результаты (df, обученная модель, history для отображения процесса обучения и best_params - подбор гиперпараметров)
         """
         if num is None:
             num = self.data['nums'][0]
@@ -198,7 +239,17 @@ class Model:
 
 class Pipeline_wind_forecast(Model):
     """
-    Необходимо выбрать модель среди ['catboost','lgbm','fc_nn','lstm'] а так же оптионально свои параметры настройки и метрику
+    Класс Pipeline_wind_forecast, который объединяет в себе методы по формированию обучаемого датафрейма, его обучению и сохранению полученных результатов. Он наследуется от родительского класса Model.
+    Методы:
+        - prep_all_data - готовит данные по всем ветрякам выбранного ГТП
+        - form_dict_prep_data - формирует словарь из ветряков с заготовленными данными для обучения
+        - relearn_model - метод переобучает модель с заданием числа эпох и early_stopping_range
+        - do_ansamble - производит простейшее ансамблирование (стеккинг) по лучшим моделям из выбранных
+        - plot_lerning_process - метод для построения графика процесса обучения (на основании его можно сделать вывод о переобучении модели для конкретного ветряка)
+        - get_description - дает описание результатов прогноза
+        - upseart_best_params_to_db - загрузка в БД best_params (гиперпараметров), в случае, если модель обучалась с их подбором 
+        - save_models - сохранение моделей в виде архива с моделями
+        - save_data - сохранение остальных данных модели
     """
     def __init__(self):
         self.default_params_per_model = params
@@ -229,6 +280,9 @@ class Pipeline_wind_forecast(Model):
         # self.data['results']['best_params'] = dict()
 
     def prep_all_data(self, loc_points, eng, name_gtp='GUK_3'):
+        """
+        Метод для подготовки данных по всем ветрякам данной ГТП 
+        """
         super().prep_all_data(loc_points, eng, name_gtp)
         self.eng = eng
         self.data['Ncap'] = self.Ncap
@@ -237,6 +291,11 @@ class Pipeline_wind_forecast(Model):
         self.name_gtp = name_gtp
 
     def form_dict_prep_data(self):
+        """
+        Метод по формированию данных для прогнозирования для всех ветряков выбранногй ГТП по всем моделям
+        На выходе:
+            self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm - объекты класса (датафреймы) x_... и y_... - признаки и таргеты для построения моделей предсказания
+        """
         for num in self.nums:
             super().prep_data(self.data['all_data'], num)
             self.data['x_catboost'][num] = self.x_trees 
@@ -255,10 +314,16 @@ class Pipeline_wind_forecast(Model):
 
     def form_dict_fit_predict(self, num_to_fit=None, models=['catboost','lgbm','fc_nn','lstm'], test_size=None, start_test_date=None, purpose='fit_by_setted_params'):
         """
-        purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']\n
-            test - означает, что производится легкое обучение (25 итераций)\n
-            fit_by_setted_params - означает, что модель обучается с заданными по дефолту параметрами\n
-            tune_params - означает, что будут подбираться гиперпараметры и создастся отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!!
+        Метод для прогнозирования выработки ЭЭ всей ГТП
+        На вход:
+            - num_to_fit - номер ветряка, по которому выполнять подбор гиперпараметров
+            - models - модели для прогнозирования 
+            - test_size - разделение на выборки тренировочную и тестовую (задается доля тестовой выборки к общему датафрейму от 0 до 1) по дефолту None (задание тестовой выборки выбирается либо test_size либо start_test_date)
+            - start_test_date - разделение на выборки тренировочную и тестовую путем задания времени старта тестовых данных по дефолту None (задание тестовой выборки выбирается либо test_size либо start_test_date)
+            - purpose: Optional -> ['test', 'fit_by_setted_params', 'tune_params']
+                * test - означает, что производится легкое обучение (25 итераций)
+                * fit_by_setted_params - означает, что модель обучается с заданными по дефолту параметрами
+                * tune_params - означает, что будут подбираться гиперпараметры и создастся отдельная переменная класса self.best_params. На обучение уходит значительно больше времени!!!
         """
         self.settings = dict()
         self.settings['test_size'] = test_size
@@ -340,6 +405,16 @@ class Pipeline_wind_forecast(Model):
             self.data['results']['df_err_windfarm'][model] = dict_sum_errs[model]
 
     def relearn_model(self, model_name, num, new_epoches=2000, new_early_stopping_range=200):
+        """
+        Метод для переобучения модели
+        На входе:
+            - model_name - наименование модели
+            - num - номер ветряка
+            - new_epoches - число эпох
+            - new_early_stopping_range - число эпох, в случае, если нет улучшения за этот период, обучение останавливается
+        На выходе:
+            - данный метод ничего не возвращает, но заменяет данные модели на новые (переобученные)
+        """
         available_models = ['catboost','lgbm','fc_nn','lstm']
         assert model_name in available_models, f"Модели нет в список допустимых ['catboost','lgbm','fc_nn','lstm']"
         assert num in self.nums, f"Номера нет в списке допустимых {self.nums}"
@@ -380,9 +455,9 @@ class Pipeline_wind_forecast(Model):
     # Добавляю ансамбль моделей
     def do_ansamble(self, models=None):
         """
-        Введите модели, для их ансамблирования из списка ['catboost','lgbm','fc_nn','lstm']. \n
-        По сравнению результатов расчетов моделей автоматически выбираются модели, из которых производится ансамблирование.\n
-        В случае принудительного занесения аргумента "models" в функцию, данная опция отключается и ансамблирование производится по заданным пользователем моделям. \n
+        Введите модели, для их ансамблирования из списка ['catboost','lgbm','fc_nn','lstm']. 
+        По сравнению результатов расчетов моделей автоматически выбираются модели, из которых производится ансамблирование.
+        В случае принудительного занесения аргумента "models" в функцию, данная опция отключается и ансамблирование производится по заданным пользователем моделям. 
         Далее будут выбираться для ансамблирования модели 
         """
         self.settings['is_ansamble'] = True
@@ -426,45 +501,55 @@ class Pipeline_wind_forecast(Model):
         df_err_all = df_err_all[['N_sum', 'N_pred_sum', 'N_naiv_sum', 'err', 'err_naiv']].dropna()
         self.data['results']['df_err_windfarm']['ansamble'] = df_err_all
 
-    def plot_lerning_process(self, num, from_iter=1):
-        import matplotlib.pyplot as plt
-        for model in self.models['models']:
-            print(f'            -------   model: {model}, num: {num}     -------')
+    def plot_lerning_process(self):
+        """
+        отображение процесса обучения
+        На входе:
+            - num - номер ветряка
+            - from_iter - отобажение с N-й итерации
+        На выходе:
+            - график с процессом обучения  
+        """
+        import plotly.express as px
+        models = self.models['models']
+        dict_of_learning_results = dict()
+        for i in range(len(models)):
+            model = models[i]
             if model=='catboost':
-                history_train = list(self.data['results']['history'][num][model]['train'].values())[0][from_iter:]
-                history_test = list(self.data['results']['history'][num][model]['test'].values())[0][from_iter:]
-                plt.plot(history_train)
-                plt.plot(history_test)
-                plt.legend(['train','valid'])
-                plt.xlabel('Номер итерации')
-                plt.ylabel(f"Ошибка ({list(self.data['results']['history'][num][model]['test'].keys())[0]})")
-                plt.grid()
-                plt.show()
+                tmp_df = pd.DataFrame()
+                for num in self.nums:
+                    history_train = list(self.data['results']['history'][num][model]['train'].values())[0][20:]
+                    history_test = list(self.data['results']['history'][num][model]['test'].values())[0][20:]
+                    tmp_df_2 = pd.DataFrame(history_test, columns=[f'{model}_{num}'])
+                    tmp_df = pd.concat([tmp_df, tmp_df_2], axis=1)
             elif model=='lgbm':
-                history_test = list(self.data['results']['history'][num][model]['valid_0'].values())[0][from_iter:]
-                plt.plot(history_test)
-                plt.legend(['valid'])
-                plt.xlabel('Номер итерации')
-                plt.ylabel(f"Ошибка ({list(self.data['results']['history'][num]['lgbm']['valid_0'].keys())[0]})")
-                plt.grid()
-                plt.show()
+                tmp_df = pd.DataFrame()
+                for num in self.nums:
+                    history_test = list(self.data['results']['history'][num][model]['valid_0'].values())[0][20:]
+                    tmp_df_2 = pd.DataFrame(history_test, columns=[f'{model}_{num}'])
+                    tmp_df = pd.concat([tmp_df, tmp_df_2], axis=1)
             elif model in ['fc_nn','lstm']:
-                history_train = self.data['results']['history'][num][model]['loss'][from_iter:]
-                history_test = self.data['results']['history'][num][model]['val_loss'][from_iter:]
-                plt.plot(history_train)
-                plt.plot(history_test)
-                plt.legend(['train','valid'])
-                plt.xlabel('Номер итерации')
-                if self.models['best_params'][model] is None:
-                    loss_func = self.default_params_per_model[model]['loss_func']
-                else:
-                    loss_func = self.models['best_params'][model]['loss_func']
-                plt.ylabel(f"Ошибка ({loss_func})")
-                plt.grid()
-                plt.show()
-            print()
+                tmp_df = pd.DataFrame()
+                for num in self.nums:
+                    history_train = self.data['results']['history'][num][model]['loss'][20:]
+                    history_test = self.data['results']['history'][num][model]['val_loss'][20:]
+                    tmp_df_2 = pd.DataFrame(history_test, columns=[f'{model}_{num}'])
+                    tmp_df = pd.concat([tmp_df, tmp_df_2], axis=1)
+            tmp_df.index.name = 'epoches'
+            dict_of_learning_results[model] = tmp_df
+        for model in dict_of_learning_results.keys():
+            fig = px.line(dict_of_learning_results[model], title=model)
+            fig.show()
+        return dict_of_learning_results
 
-    def get_description(self, df_err=True, plots=True):
+    def get_description(self):
+        """
+        Метод, формирующий данные для отображения результатов
+        На выходе:
+            - df_all - описание датайрейма (.describe()) 
+            - N - график фактических данных выработки станции и прогнозные значения
+            - err - ошибка, осредненная за 24ч 
+        """
         import plotly.express as px
         df_all = pd.DataFrame()
         for model in self.data['results']['df_err_windfarm'].keys():
@@ -481,24 +566,14 @@ class Pipeline_wind_forecast(Model):
         for model in cols_to_describe:
             df_all[f'err_{model}'] = (df_all['N_sum']-df_all[f'N_pred_{model}']).abs()*100/self.Ncap
         df_all = df_all.dropna()
-        # if df_err:
-        #     print(f'                            --------- Результат расчетов моделей прогнозирования ВЭС {self.name_gtp} --------- ')
-        #     try:
-        #         display(df_all.describe())
-        #     except:
-        #         print(df_all.describe())
-        #     print()
-        if plots:
-            N = px.line(df_all[[x for x in df_all.columns if 'N_' in x]], height=500, width=1250, title='N, МВт')
-            err = px.line(df_all[[x for x in df_all.columns if 'err_' in x]].rolling(24).mean(), height=500, width=1250, title='err, %')
-            # print(f'                            --------- Фактические и прогнозные данные выработки ЭЭ по ВЭС "{self.name_gtp}" --------- ')
-            # # N.show()
-            # print()
-            # print(f'                            --------- График ошибок предсказания ЭЭ по ВЭС "{self.name_gtp}" по моделям --------- ')
-            # # err.show()
+        N = px.line(df_all[[x for x in df_all.columns if 'N_' in x]], height=500, width=1250, title='N, МВт')
+        err = px.line(df_all[[x for x in df_all.columns if 'err_' in x]].rolling(24).mean(), height=500, width=1250, title='err, %')
         return df_all.describe(), N, err
 
     def upseart_best_params_to_db(self):
+        """
+        Метод, который сохраняет данные, которые дали лучший результат по модели при подборе гиперпараметров в модели
+        """
         df_to_insert = pd.DataFrame([[pd.to_datetime(self.time_tune), self.gtp_id, 48, str(self.models['best_params'][model]).replace('\'', '"'), model, self.data['results']['df_err_windfarm'][model].describe()[['err']].iloc[[1],[0]].values[0][0], len(self.data['results']['df_err_windfarm'][model])] for model in self.models['models']], columns = ['init_date', 'gtp_id', 'hour_distance', 'optuna_data','model_name', 'error', 'count_rows'])
         values =  ','.join([str(i) for i in list(df_to_insert.to_records(index=False))])#.replace('"', "'")
         query_string1 = f"""
@@ -515,13 +590,13 @@ class Pipeline_wind_forecast(Model):
 
     def save_models(self):
         """
-        Функция для сохранения полученных моделей.
+        Метод, который сохраняет модели на локальный диск в директорию ./results как архив моделей "models_YYYY-MM-DD hh.mm.ss.zip"
         Далее приведены примеры для получения моделей внутри языка python:
-        catboost_model = catboost.CatBoostRegressor() 
-        catboost_model.load_model('03_catboost.h5')
-        lgb_model = lgb.Booster(model_file='03_lgbm.h5')
-        fc_nn_model = tf.keras.models.load_model('03_fc_nn.h5')
-        lstm_model = tf.keras.models.load_model('03_lstm.h5')
+            - catboost_model = catboost.CatBoostRegressor() 
+            - catboost_model.load_model('03_catboost.h5')
+            - lgb_model = lgb.Booster(model_file='03_lgbm.h5')
+            - fc_nn_model = tf.keras.models.load_model('03_fc_nn.h5')
+            - lstm_model = tf.keras.models.load_model('03_lstm.h5')
         """
         folder = 'results'
         # сохраняю данные в файл zip
@@ -557,6 +632,7 @@ class Pipeline_wind_forecast(Model):
 
     def save_data(self):
         """
+        Метод, который сохраняет данные на локальный диск в директорию ./results как файл "data_YYYY-MM-DD hh.mm.ss.dat"
         Далее приведены примеры для получения данных внутри языка python:
         with open('data.dat', 'rb') as f:
             data_to_save = dill.load(f)
@@ -607,4 +683,4 @@ if __name__ == '__main__':
     pipeline.form_dict_prep_data()
     pipeline.form_dict_fit_predict(pipeline.nums[0], test_size=0.175, purpose='test')
     print(pipeline.__dict__.keys())
-    pipeline.plot_lerning_process('06', 3)
+    pipeline.plot_lerning_process()
