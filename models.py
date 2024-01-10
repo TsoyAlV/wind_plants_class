@@ -7,6 +7,7 @@ import lightgbm as lgb
 import time
 import sklearn
 import optuna
+import os
 
 
 def train_test_split_by_date(x, y, start_date):
@@ -43,6 +44,13 @@ def solve_model_fc_nn(x, y, num, params, epoches, early_stopping_rounds, scally,
         - test_size - размер тестовой выборки (опционально - выбрать либо test_size либо start_test_date)
         - start_test_date - старт тестирования данных (опционально - выбрать либо test_size либо start_test_date)
     """
+    os.environ['PYTHONHASHSEED'] = str(random_seed)
+
+    # Setting the seed for numpy-generated random numbers
+    np.random.seed(random_seed)
+
+    # Setting the graph-level random seed.
+    tf.random.set_seed(random_seed)
     if test_size is not None:
         X_traintest, X_holdout, y_traintest, y_holdout = train_test_split(x, y, shuffle=False, test_size=test_size)
     elif start_test_date is not None:
@@ -254,6 +262,14 @@ def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, 
         - test_size - размер тестовой выборки (опционально - выбрать либо test_size либо start_test_date)
         - start_test_date - старт тестирования данных (опционально - выбрать либо test_size либо start_test_date)
     """
+    os.environ['PYTHONHASHSEED'] = str(random_seed)
+
+    # Setting the seed for numpy-generated random numbers
+    np.random.seed(random_seed)
+
+    # Setting the graph-level random seed.
+    tf.random.set_seed(random_seed)
+
     if test_size is not None:
         train_test_range = int(len(x)*(1-test_size))
         X_traintest, X_holdout, y_traintest, y_holdout = x[:train_test_range], x[train_test_range:], y[:train_test_range], y[train_test_range:]    
@@ -314,7 +330,6 @@ def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, 
         print("Подбор гиперпараметров окончен.")
         print('best_params=', best_params)
     else:
-        print(params)
         units0 = params['units0']
         activate1 = params['activate1']
         activate3 = params['activate3']
@@ -340,8 +355,8 @@ def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, 
         shape = weights[i].shape
         zeros_weights.append(rng.rand(*shape))
     nn1.set_weights(zeros_weights)
+    #fitting 
     history = nn1.fit(X_train, y_train, batch_size=X_train.shape[0]//10, epochs=epoches, verbose=verbose_, callbacks=callbacks, validation_data=(X_test, y_test))
-    
     y_holdout_pred = nn1.predict(X_holdout)
     df_pred_holdout = pd.DataFrame(data = y_holdout_pred, index=y_holdout.index)
                           # columns = [f'N_pred_{num}'])

@@ -95,7 +95,7 @@ layer_header = html.Div([header_1,
 
 print('start_date:', _start_date.date)
 layer_results = html.Div([dcc.Tabs(id="res-tabs", value='tab-1', children=[
-                                    dcc.Tab(label='Main Results', value='tab-1'),
+                                    dcc.Tab(label='Results', value='tab-1'),
                                     dcc.Tab(label='Learning processes', value='tab-2'),
                                     dcc.Tab(label='Save results', value='tab-3'),
     ]),
@@ -236,9 +236,11 @@ app.layout = html.Div([
 def button_do_learn(btn1, purpose, date):
     if "button-start-pipeline" == ctx.triggered_id: 
         if purpose == 'test':
-            pipeline.form_dict_fit_predict(models=['catboost'], start_test_date=date, purpose=purpose)
+            pipeline.form_dict_fit_predict(models=['lstm'], start_test_date=date, purpose=purpose)
         else:
-            pipeline.form_dict_fit_predict(start_test_date=date, purpose=purpose)
+            #fitting
+            pipeline.form_dict_fit_predict(models=['lstm'], start_test_date=date, purpose=purpose)
+            # pipeline.form_dict_fit_predict(start_test_date=date, purpose=purpose)
         pipeline.do_ansamble()
         page = 'tab-1'
     return '', page
@@ -256,7 +258,7 @@ def button_do_learn(btn1, purpose, date):
     prevent_initial_call=True)
 def button_do_relearn(btn1, model, num, epoches, early_stopping_rounds):
     msg = ' '
-    relearn_model = pipeline.relearn_model(model, num, int(epoches), int(early_stopping_rounds))
+    pipeline.relearn_model(model, num, int(epoches), int(early_stopping_rounds))
     if "button-relearn-model" == ctx.triggered_id: 
         msg = f'Для модели {model} и ветряка №{num} было произведеено переобучение'
     return html.Div(html.P(msg)), ' '
