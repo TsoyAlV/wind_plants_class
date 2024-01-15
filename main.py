@@ -47,7 +47,7 @@ params = {
         }
 # Параметры для подбора гиперпараметров (число обучающих итераций и время в сек.)
 # tune_params = {'n_trials': 2,'timeout_secunds': 60*2} # Удалить и раскоментировать после отладки (пока нужно для проверки работы подбора гиперпараметров)
-tune_params = {'n_trials': 50,'timeout_secunds': 3600 * 2}
+tune_params = {'n_trials': 75,'timeout_secunds': 3600 * 2}
 
 class Model:
     """
