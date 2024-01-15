@@ -355,7 +355,6 @@ def solve_model_lstm(x, y, num, params, epoches, early_stopping_rounds, scally, 
         shape = weights[i].shape
         zeros_weights.append(rng.rand(*shape))
     nn1.set_weights(zeros_weights)
-    #fitting 
     history = nn1.fit(X_train, y_train, batch_size=X_train.shape[0]//10, epochs=epoches, verbose=verbose_, callbacks=callbacks, validation_data=(X_test, y_test))
     y_holdout_pred = nn1.predict(X_holdout)
     df_pred_holdout = pd.DataFrame(data = y_holdout_pred, index=y_holdout.index)

@@ -74,33 +74,33 @@ class Model:
         """
         res = pd.read_sql_query(f"""select gtp_name from wind_gtp """, eng)
         eng.dispose()
-        print(list(res.values.astype(str).T[0]))
-        return res.values.astype(str).T[0]
+        lst_of_available_GTP = list(res.values.astype(str).T[0])
+        tmp_lst = []
+        for gtp in lst_of_available_GTP:
+            tmp_lst.append('_'.join(gtp.split('_')[:-1]))
+        print(list(set(tmp_lst)))
+        return list(set(tmp_lst))
 
-    def prep_all_data(self, loc_points, eng, name_gtp='GUK_3'):
+    def prep_all_data(self, eng, gtp_name='GUK'):
         """
         Метод готовит данные для всех ветряков заданной ГТП
         На входе:
-            - loc_points - локации для проверки на наилучшую корреляцию # [[45.22, 43.5513],
-                                                                           [42.35, 43.5512],
-                                                                           ...............]]
             - eng - подключение к БД
-            - name_gtp - наименование ГТП для формирования данных по всем ветрякам данной ГТП
+            - gtp_name - наименование ГТП для формирования данных по всем ветрякам данной ГТП
         На выходе:
             - сохраняет внутри класса self.Ncap - коэффициент для оценки точности (обычно максимальная выработка по всем ветрякам ГТП)
-            - сохраняет внутри класса self.gtp_id 
+            - сохраняет внутри класса self.gtp_name 
         """
         # пока не буду прорабатывать данную функцию полностью
-        self.df_all, self.nums = first_prep_data(loc_points, 
-                                                eng=eng, 
-                                                name_gtp = name_gtp, 
+        self.df_all, self.nums = first_prep_data(eng=eng, 
+                                                gtp_name = gtp_name, 
                                                 start_date=str(datetime.datetime.now()-datetime.timedelta(days=365*3))[:10], 
                                                 end_date=str(datetime.datetime.now()-datetime.timedelta(days=1))[:10])
         self.nums.sort()
-        res = pd.read_sql_query(f"""select gtp_power, gtp_id from wind_gtp where gtp_name = '{name_gtp}'""", eng)
-        assert res.shape == (1, 2), f'Не удалось найти конкретную выработку Ncap для дальнейшего расчета погрешности. Должно быть res.shape == (1, 2) а получилось {res.shape}'
-        self.Ncap = res.values[0][0]
-        self.gtp_id = int(res.values[0][1])
+        res = pd.read_sql_query(f"""select gtp_power, gtp_id from wind_gtp where gtp_name like '{gtp_name}%%'""", eng)
+        assert res.shape[0] >= 1, f'Не удалось найти конкретную выработку Ncap для дальнейшего расчета погрешности. Должно быть res.shape == (1, 2) а получилось {res.shape}'
+        self.Ncap = np.array(res.values).sum(axis=0)[0]
+        self.gtp_name = gtp_name
         eng.dispose()    
 
     def prep_data(self, df_all, num):
@@ -113,7 +113,7 @@ class Model:
             - self.x_trees, self.y_trees, self.x_fc_nn, self.y_fc_nn, self.x_lstm, self.y_lstm, self.scallx, self.scally - датафреймы для обучения и предсказания и MinMaxscaller's 
         """
         df, self.scallx, self.scally = do_scaling(df_all)
-        df = df.dropna()
+        # df = df.dropna()
         #trees
         df_trees = form_batch_trees(df, self.nums)[num]
         self.x_trees = df_trees.drop(columns=[f'N_{num}'])
@@ -339,16 +339,16 @@ class Pipeline_wind_forecast(Model):
         self.data['results']['history'] = dict()
         # self.data['results']['best_params'] = dict()
 
-    def prep_all_data(self, loc_points, eng, name_gtp='GUK_3'):
+    def prep_all_data(self, eng, gtp_name='GUK'):
         """
         Метод для подготовки данных по всем ветрякам данной ГТП 
         """
-        super().prep_all_data(loc_points, eng, name_gtp)
+        super().prep_all_data(eng, gtp_name)
         self.eng = eng
         self.data['Ncap'] = self.Ncap
         self.data['all_data'] = self.df_all
         self.data['nums'] = self.nums
-        self.name_gtp = name_gtp
+        self.gtp_name = gtp_name
 
     def form_dict_prep_data(self):
         """
@@ -632,12 +632,12 @@ class Pipeline_wind_forecast(Model):
         """
         Метод, который сохраняет данные, которые дали лучший результат по модели при подборе гиперпараметров в модели
         """
-        df_to_insert = pd.DataFrame([[pd.to_datetime(self.time_tune), self.gtp_id, 48, str(self.models['best_params'][model]).replace('\'', '"'), model, self.data['results']['df_err_windfarm'][model].describe()[['err']].iloc[[1],[0]].values[0][0], len(self.data['results']['df_err_windfarm'][model])] for model in self.models['models']], columns = ['init_date', 'gtp_id', 'hour_distance', 'optuna_data','model_name', 'error', 'count_rows'])
+        df_to_insert = pd.DataFrame([[pd.to_datetime(self.time_tune), self.gtp_name, 48, str(self.models['best_params'][model]).replace('\'', '"'), model, self.data['results']['df_err_windfarm'][model].describe()[['err']].iloc[[1],[0]].values[0][0], len(self.data['results']['df_err_windfarm'][model])] for model in self.models['models']], columns = ['init_date', 'gtp_name', 'hour_distance', 'optuna_data','model_name', 'error', 'count_rows'])
         values =  ','.join([str(i) for i in list(df_to_insert.to_records(index=False))])#.replace('"', "'")
         query_string1 = f"""
-        INSERT INTO wind_best_params(init_date, gtp_id, hour_distance, optuna_data, model_name, error, count_rows)
+        INSERT INTO wind_best_params(init_date, gtp_name, hour_distance, optuna_data, model_name, error, count_rows)
         VALUES {values}
-        ON CONFLICT (init_date, gtp_id, hour_distance, model_name)
+        ON CONFLICT (init_date, gtp_name, hour_distance, model_name)
         DO UPDATE SET optuna_data = excluded.optuna_data
         """
         with self.eng.connect() as connection:
@@ -718,26 +718,9 @@ class Pipeline_wind_forecast(Model):
         return path_to_file
 
 if __name__ == '__main__':
-    loc_points = [[48.117803, 39.977637],
-                    [48.118372, 39.961951],
-                    [48.102330, 39.972937],
-                    [48.098727, 39.940489],
-                    [48.096223, 39.948417],
-                    [48.101592, 39.972652],
-                    [48.095786, 39.976725],
-                    [48.087902, 39.950087],
-                    [48.090580, 39.941083],
-                    [48.082495, 39.965106],
-                    [48.083546, 39.981992],
-                    [48.075435, 39.970784],
-                    [48.068148, 39.971316],
-                    [48.071882, 39.997197],
-                    [48.078555, 39.999711],
-                    [48.116879, 39.977684],
-                    [48.118266, 39.963142]]
     eng = create_engine('postgresql://postgres:achtung@192.168.251.133:5432/fortum_wind')
     pipeline = Pipeline_wind_forecast()
-    pipeline.prep_all_data(loc_points, eng, name_gtp='GUK_3')
+    pipeline.prep_all_data(eng, gtp_name='GUK')
     pipeline.form_dict_prep_data()
     pipeline.form_dict_fit_predict(pipeline.nums[0], test_size=0.175, purpose='test')
     print(pipeline.__dict__.keys())

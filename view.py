@@ -15,6 +15,7 @@ from main import Pipeline_wind_forecast
 eng = create_engine('postgresql://postgres:achtung@192.168.251.133:5432/fortum_wind')
 pipeline = Pipeline_wind_forecast()
 available_gtps = pipeline.get_available_GTPs(eng)
+available_gtps.sort()
 app = Dash(name="dash app wind forecasting")
 
 
@@ -46,11 +47,8 @@ header_1 = html.Div([header_1_0,
 def render_fig_N_by_num(btn, gtp):
     # Выборка location
     print(f'Нажата кнопка {btn}')
-    res = pd.read_sql_query(f"""select latitude, longitude from wind_gtp where gtp_name = '{gtp}' """, eng)
-    eng.dispose()
-    loc_points = res.values
     # Выполнение prep функций
-    pipeline.prep_all_data(loc_points, eng, name_gtp=gtp)
+    pipeline.prep_all_data(eng, gtp_name=gtp)
     pipeline.form_dict_prep_data()
     fig_W_by_wind_num = px.line(pipeline.df_all[[x for x in pipeline.df_all.columns if 'N_' in x]])
     if 'button-get-graph-N-by-nums' == ctx.triggered_id:
@@ -190,13 +188,14 @@ def render_content(value):
 
     elif value == 'tab-3':
         try:
-            df_to_insert = pd.DataFrame([[str(pipeline.time_tune)[:19], pipeline.gtp_id, 48, str(pipeline.models['best_params'][model]).replace('\'', '"'), model, pipeline.data['results']['df_err_windfarm'][model].describe()[['err']].iloc[[1],[0]].values[0][0], len(pipeline.data['results']['df_err_windfarm'][model])] for model in pipeline.models['models']], 
-                                          columns = ['init_date', 'gtp_id', 'hour_distance', 'optuna_data','model_name', 'error', 'count_rows'])
+            df_to_insert = pd.DataFrame([[str(pipeline.time_tune)[:19], pipeline.gtp_name, 48, str(pipeline.models['best_params'][model]).replace('\'', '"'), 
+                                          model, pipeline.data['results']['df_err_windfarm'][model].describe()[['err']].iloc[[1],[0]].values[0][0], 
+                                          len(pipeline.data['results']['df_err_windfarm'][model])] for model in pipeline.models['models']], 
+                                          columns = ['init_date', 'gtp_name', 'hour_distance', 'optuna_data','model_name', 'error', 'count_rows'])
             df_to_insert['error'] = df_to_insert['error'].round(4)
             df_to_insert['optuna_data'] = df_to_insert['optuna_data'].apply(lambda x: x if len(x)<22 else x[:12]+'...'+x[-8:])
             table = html.Div(dash_table.DataTable(df_to_insert.to_dict('records'), [{"name": i, "id": i} for i in df_to_insert.columns]), style={'width':1000})
             left_part_tab_3 = html.Div([html.H3('Данные по моделям:'), html.Div([table])], style={'float':'left'})
-            # fitting Добавить проверку purpose 
             button_save_best_params = html.Div(html.Button('Save best params', id='btn-save-best-params', n_clicks=0))
             save_best_params = html.Div([html.H5('Для сохранения "Best_params" нажмите на кнопку "Save best params":'), 
                                          button_save_best_params, 
@@ -208,7 +207,6 @@ def render_content(value):
                                         dcc.Download(id="download-other-data")])
             save_other_data =  html.Div([html.H5('Для получения остальных данных нажмите на кнопку "Download other data":'), button_other_data])
             right_part_tab_3 = html.Div([html.H3('Сохранение результатов:'), html.Div([save_best_params, save_models, save_other_data])], style={'float':'left', 'width':700, 'margin-left': 40, 'margin-bottom':400})
-            
             return html.Div([left_part_tab_3,
                              right_part_tab_3])
         except:
@@ -235,14 +233,16 @@ app.layout = html.Div([
     prevent_initial_call=True)
 def button_do_learn(btn1, purpose, date):
     if "button-start-pipeline" == ctx.triggered_id: 
+        from callbacks import callback_congratulations_message_to_telegram
+
         if purpose == 'test':
             pipeline.form_dict_fit_predict(models=['lstm'], start_test_date=date, purpose=purpose)
         else:
-            #fitting
-            pipeline.form_dict_fit_predict(models=['lstm'], start_test_date=date, purpose=purpose)
-            # pipeline.form_dict_fit_predict(start_test_date=date, purpose=purpose)
+            # pipeline.form_dict_fit_predict(models=['fc_nn','lstm'],start_test_date=date, purpose=purpose)
+            pipeline.form_dict_fit_predict(start_test_date=date, purpose=purpose)
         pipeline.do_ansamble()
         page = 'tab-1'
+        callback_congratulations_message_to_telegram()
     return '', page
 
 
@@ -278,7 +278,7 @@ def save_buttons(purpose, bests, models, data):
     down_models = ''
     down_data = ''
     if "btn-save-best-params" == ctx.triggered_id:
-        if purpose == 'tune_params':
+        if pipeline.models['best_params'][pipeline.models['models'][0]] is not None:
             pipeline.upseart_best_params_to_db()
             msg = 'Данные сохранены в БД'
         else:
